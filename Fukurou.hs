@@ -33,7 +33,7 @@ notifyPlay (Fukurou _ side mGame) game = do
 askPlay :: Fukurou -> IO Play
 askPlay (Fukurou mRandomGen side mGame) = do
 	game <- readMVar mGame
-	case legalMoves side $ latestBoard game of
+	case legalMovesConsideringCheck side $ latestBoard game of
 		[] -> return Resign
 		plays -> do
 			gen <- takeMVar mRandomGen

@@ -89,7 +89,7 @@ addPlay play game
 		plays = play : plays game}
 	|otherwise = Nothing  -- illegal move
 	where
-		currentLegalMoves = Resign : legalMoves (getTurn game) (latestBoard game)
+		currentLegalMoves = Resign : legalMovesConsideringCheck (getTurn game) (latestBoard game)
 
 subtractCapture :: Piece -> [Piece] -> [Piece]
 subtractCapture pieceToRemove (piece:pieces)
