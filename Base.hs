@@ -23,6 +23,15 @@ promote KA = UM
 promote HI = RY
 promote p = p
 
+unpromote :: Piece -> Piece
+unpromote TO = FU
+unpromote NY = KY
+unpromote NK = KE
+unpromote NG = GI
+unpromote UM = KA
+unpromote RY = HI
+unpromote p = p
+
 data PlayerSide = Sente | Gote deriving(Show, Eq, Ord)
 
 -- | A sente-gote pair of any symmetrical information.
@@ -35,6 +44,10 @@ instance Functor SengoPair where
 lookupPair :: SengoPair a -> PlayerSide -> a
 lookupPair (SengoPair s _) Sente = s
 lookupPair (SengoPair _ g) Gote = g
+
+partiallyModifyPair :: PlayerSide -> (a -> a) -> SengoPair a -> SengoPair a
+partiallyModifyPair Sente f (SengoPair s g) = SengoPair (f s) g
+partiallyModifyPair Gote f (SengoPair s g) = SengoPair s (f g)
 
 flipSide :: PlayerSide -> PlayerSide
 flipSide Sente = Gote
@@ -62,15 +75,27 @@ getTurn game
 	|otherwise = Gote
 
 -- | Add a play if it's a legal play.
--- TODO: update captures
--- TODO: update board
 addPlay :: Play -> Game -> Maybe Game
 addPlay play game
 	|isJust (winningSide game) = Nothing
-	|elem play currentLegalMoves = Just $ game {plays = play : plays game}
+	|elem play currentLegalMoves = Just $ game {
+		latestBoard = updateBoard play (latestBoard game),
+		plays = play : plays game}
 	|otherwise = Nothing  -- illegal move
 	where
 		currentLegalMoves = Resign : legalMoves (getTurn game) (latestBoard game)
+
+-- | Apply a known-to-be-legal move to given `BoardState`.
+updateBoard :: Play -> BoardState -> BoardState
+updateBoard (Play posFrom posTo pieceTypeTo) (BoardState pieces captures)
+	= case M.lookup posTo pieces of
+		Nothing -> BoardState pieces' captures  -- no capture
+		Just (_, pieceTypeToBeCaptured) -> BoardState pieces' (captures' pieceTypeToBeCaptured)
+	where
+		pieces' = M.insert posTo (side, pieceTypeTo) $ M.delete posFrom pieces
+		captures' newPieceType = partiallyModifyPair side (newPieceType:) captures
+
+		(side, pieceTypeFrom) = pieces M.! posFrom
 
 -- TODO: consider draw case.
 -- TODO: implement check-mate
@@ -96,6 +121,7 @@ initialBoardState = BoardState (M.fromList pairs) (SengoPair [] [])
 		nonFuRow = [KY, KE, GI, KI, OU, KI, GI, KE, KY]
 
 -- | Legal moves: movings or puttings of pieces, excluding Resign.
+-- TODO: implement putting moves
 legalMoves :: PlayerSide -> BoardState -> [Play]
 legalMoves side board = movingPlays side board ++ puttingMoves
 	where
