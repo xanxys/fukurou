@@ -7,7 +7,7 @@
 module Fukurou where
 import Control.Concurrent.MVar
 import Control.Monad
-import Control.Monad.State.Lazy
+import Control.Monad.State.Strict
 import Data.Array.Unboxed
 import Data.Bits
 import Data.List
@@ -119,7 +119,7 @@ askPlay (Fukurou mRandomGen side mGame) = do
 		[] -> return Resign
 		plays -> do
 			let ((score, play), state) = runState
-				(searchBestPlay (-10000) 10000 3 side (latestBoard game))
+				(searchBestPlay (-10000) 10000 4 side (latestBoard game))
 				(SearchState {numberOfBoards = 0, scoreCacheSente = M.empty})
 			printf "#boards: %d\n" (numberOfBoards state)
 			printf "#unique boards: %d\n" (M.size $ scoreCacheSente state)
@@ -127,8 +127,8 @@ askPlay (Fukurou mRandomGen side mGame) = do
 			return play
 
 data SearchState = SearchState {
-		numberOfBoards :: Int,
-		scoreCacheSente :: M.Map BoardState Float
+		numberOfBoards :: !Int,
+		scoreCacheSente :: !(M.Map BoardState Float)
 	}
 
 
@@ -149,17 +149,17 @@ evaluateBoard side board = do
 
 -- | Select optimal play for current side. Returns the play and score.
 searchBestPlay :: Float -> Float -> Int -> PlayerSide -> BoardState -> State SearchState (Float, Play)
-searchBestPlay _ _ 0 side board = do
+searchBestPlay !alpha !beta 0 !side !board = do
 	score <- evaluateBoard side board
-	return (score, error "Terminal Node")
+	return $! score `seq` (score, error "Terminal Node")
 searchBestPlay !alpha !beta !depth !side !board
 	|null plays = do
 		score <- evaluateBoard side board
-		return (score, Resign)
-	|otherwise = findBestPlay alpha undefined plays
+		return $! score `seq` (score, Resign)
+	|otherwise = findBestPlay alpha (head plays) (tail plays)
 	where
-		findBestPlay !currentBestScore currentBestPlay [] = return (currentBestScore, currentBestPlay)
-		findBestPlay !currentBestScore currentBestPlay (play:plays)
+		findBestPlay !currentBestScore !currentBestPlay [] = return (currentBestScore, currentBestPlay)
+		findBestPlay !currentBestScore !currentBestPlay (play:plays)
 			|currentBestScore > beta = return (currentBestScore, currentBestPlay)
 			|otherwise = do
 				(scoreEnemy, _) <- searchBestPlay (-beta) (-currentBestScore) (depth - 1) (flipSide side) (updateBoard play board)

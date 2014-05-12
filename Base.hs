@@ -74,8 +74,8 @@ data BoardState = BoardState (M.Map ValidPosition (PlayerSide, Piece)) (SengoPai
 
 -- | from, to, piece type (after movement)
 data Play
-	= Move ValidPosition ValidPosition Piece
-	| Put PlayerSide ValidPosition Piece
+	= Move !ValidPosition !ValidPosition !Piece
+	| Put !PlayerSide !ValidPosition !Piece
 	| Resign
 	deriving(Eq, Ord)
 
