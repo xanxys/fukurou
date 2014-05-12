@@ -4,6 +4,7 @@
 -- representation.
 module Base where
 import qualified Data.Map as M
+import qualified Data.Set as S
 import Data.Functor
 import Data.List
 import Data.Maybe
@@ -63,7 +64,8 @@ data BoardState = BoardState (M.Map (Int, Int) (PlayerSide, Piece)) (SengoPair [
 
 -- | from, to, piece type (after movement)
 data Play
-	= Play (Int, Int) (Int, Int) Piece
+	= Move (Int, Int) (Int, Int) Piece
+	| Put PlayerSide (Int, Int) Piece
 	| Resign
 	deriving(Eq, Ord)
 
@@ -89,9 +91,14 @@ addPlay play game
 	where
 		currentLegalMoves = Resign : legalMoves (getTurn game) (latestBoard game)
 
+subtractCapture :: Piece -> [Piece] -> [Piece]
+subtractCapture pieceToRemove (piece:pieces)
+	|piece == pieceToRemove = pieces
+	|piece /= pieceToRemove = piece : subtractCapture pieceToRemove pieces
+
 -- | Apply a known-to-be-legal move to given `BoardState`.
 updateBoard :: Play -> BoardState -> BoardState
-updateBoard (Play posFrom posTo pieceTypeTo) (BoardState pieces captures)
+updateBoard (Move posFrom posTo pieceTypeTo) (BoardState pieces captures)
 	= case M.lookup posTo pieces of
 		Nothing -> BoardState pieces' captures  -- no capture
 		Just (_, pieceTypeToBeCaptured) -> BoardState pieces' (captures' $ unpromote pieceTypeToBeCaptured)
@@ -100,6 +107,11 @@ updateBoard (Play posFrom posTo pieceTypeTo) (BoardState pieces captures)
 		captures' newPieceType = partiallyModifyPair side (newPieceType:) captures
 
 		(side, pieceTypeFrom) = pieces M.! posFrom
+updateBoard (Put side posTo pieceTypeTo) (BoardState pieces captures)
+	= BoardState pieces' captures'
+	where
+		pieces' = M.insert posTo (side, pieceTypeTo) pieces
+		captures' = partiallyModifyPair side (subtractCapture pieceTypeTo) captures
 
 -- TODO: consider draw case.
 -- TODO: implement check-mate
@@ -127,7 +139,8 @@ isCheck :: PlayerSide -> BoardState -> Bool
 isCheck side state@(BoardState pieces _) = any takesKing $ enemyMoves
 	where
 		enemyMoves = legalMoves (flipSide side) state
-		takesKing (Play _ dst _) = dst == kingPos
+		takesKing (Move _ dst _) = dst == kingPos
+		takesKing (Put _ _ _) = False
 		[(kingPos, _)] = filter ((== (side, OU)) . snd) $ M.assocs pieces
 
 legalMovesConsideringCheck :: PlayerSide -> BoardState -> [Play]
@@ -138,9 +151,16 @@ legalMovesConsideringCheck side board = filter (not . leadsToCheck) $ legalMoves
 -- | Legal moves: movings or puttings of pieces, excluding Resign.
 -- TODO: implement putting moves
 legalMoves :: PlayerSide -> BoardState -> [Play]
-legalMoves side board = movingPlays side board ++ puttingMoves
-	where
-		puttingMoves = []
+legalMoves side board = movingPlays side board ++ puttingMoves side board
+
+puttingMoves :: PlayerSide -> BoardState -> [Play]
+puttingMoves side (BoardState pieces captures) =
+	[Put side posTo pieceType | posTo <- S.toList puttablePositions, pieceType <- puttableTypes]
+	where		
+		puttablePositions = allPositions `S.difference` (M.keysSet pieces)
+		allPositions = S.fromList [(x, y) | x <- [1..9], y <- [1..9]]
+
+		puttableTypes = map head $ group $ sort $ lookupPair captures side
 
 movingPlays :: PlayerSide -> BoardState -> [Play]
 movingPlays side board@(BoardState pieces _) = concatMap generatePlaysFor friendPieces
@@ -149,8 +169,8 @@ movingPlays side board@(BoardState pieces _) = concatMap generatePlaysFor friend
 			concatMap playsAt $ destinations board side posFrom
 			where
 				playsAt posTo
-					|promotable posFrom posTo pieceType = [Play posFrom posTo pieceType, Play posFrom posTo $ promote pieceType]
-					|otherwise = [Play posFrom posTo pieceType]
+					|promotable posFrom posTo pieceType = [Move posFrom posTo pieceType, Move posFrom posTo $ promote pieceType]
+					|otherwise = [Move posFrom posTo pieceType]
 
 		promotable posFrom posTo pieceType =
 			(promote pieceType /= pieceType) &&

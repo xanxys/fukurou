@@ -23,11 +23,11 @@ doCUIGame = do
 		getPlayerName False = "Human"
 		getPlayerName True = "Fukurou"
 
-		createPlayer side False = return Human
+		createPlayer side False = return $ Human side
 		createPlayer side True = liftM AI $ createFukurou side
 
 data CUIPlayer
-	= Human
+	= Human PlayerSide
 	| AI Fukurou
 
 -- | Return end-game from a game state.
@@ -60,23 +60,24 @@ continueGame players game = do
 
 -- | Notify all moves.
 notifyPlayer :: CUIPlayer -> Game -> IO ()
-notifyPlayer Human _ = return ()
+notifyPlayer (Human _) _ = return ()
 notifyPlayer (AI fukurou) game = Fukurou.notifyPlay fukurou game
 
 getPlayFromPlayer :: CUIPlayer -> IO Play
-getPlayFromPlayer Human = CUI.askPlay
+getPlayFromPlayer (Human side) = CUI.askPlay side
 getPlayFromPlayer (AI fukurou) = Fukurou.askPlay fukurou
 
 
 -- | Ask the player an (unconstrained) play. 
-askPlay :: IO Play
-askPlay = do
+askPlay :: PlayerSide -> IO Play
+askPlay side = do
 	putStrLn "Your play? (CSA-style, e.g. 0055KA=五５角打, 2829TO=二９歩成, resign)"
 	answer <- getLine
 	case answer of
 		"resign" -> return Resign
-		(sX:sY:dX:dY:ty) -> return $ Play (read [sX], read [sY]) (read [dX], read [dY]) (read ty)
-		_ -> CUI.askPlay
+		('0':'0':dX:dY:ty) -> return $ Put side (read [dX], read [dY]) (read ty)
+		(sX:sY:dX:dY:ty) -> return $ Move (read [sX], read [sY]) (read [dX], read [dY]) (read ty)
+		_ -> CUI.askPlay side
 
 askPlayerInfo :: IO (SengoPair Bool)
 askPlayerInfo = do
