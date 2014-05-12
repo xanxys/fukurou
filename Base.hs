@@ -47,6 +47,8 @@ data PlayerSide = Sente | Gote deriving(Show, Eq, Ord)
 -- | A sente-gote pair of any symmetrical information.
 -- instead of using tuples, use Sengo to avoid stupid mistakes.
 data SengoPair a = SengoPair a a
+	deriving(Eq, Ord, Show)
+
 
 instance Functor SengoPair where
 	fmap f (SengoPair s g) = SengoPair (f s) (f g)
@@ -68,7 +70,7 @@ flipSide Gote = Sente
 
 -- | Easy to use (not efficient) representation of a board.
 data BoardState = BoardState (M.Map ValidPosition (PlayerSide, Piece)) (SengoPair [Piece])
-
+	deriving(Eq, Ord, Show)
 
 -- | from, to, piece type (after movement)
 data Play

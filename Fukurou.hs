@@ -6,10 +6,12 @@
 module Fukurou where
 import Control.Concurrent.MVar
 import Control.Monad
+import Control.Monad.State.Lazy
 import Data.List
 import qualified Data.Map as M
 import Data.Ord
 import System.Random
+import Text.Printf
 
 import Base
 
@@ -68,17 +70,47 @@ askPlay (Fukurou mRandomGen side mGame) = do
 	case legalMovesConsideringCheck side $ latestBoard game of
 		[] -> return Resign
 		plays -> do
-			let (score, play) = searchBestPlay 3 side (latestBoard game)
+			let ((score, play), state) = runState
+				(searchBestPlay 3 side (latestBoard game))
+				(SearchState {numberOfBoards = 0, scoreCacheSente = M.empty})
+			printf "#boards: %d\n" (numberOfBoards state)
+			printf "#unique boards: %d\n" (M.size $ scoreCacheSente state)
 			putStrLn $ "Score: " ++ show score
 			return play
 
+data SearchState = SearchState {
+		numberOfBoards :: Int,
+		scoreCacheSente :: M.Map BoardState Float
+	}
+
+
+evaluateBoard :: PlayerSide -> BoardState -> State SearchState Float
+evaluateBoard side board = do
+	modify $ \state -> state {numberOfBoards = numberOfBoards state + 1}
+	cache <- liftM scoreCacheSente get
+	case M.lookup board cache of
+		Nothing -> do
+			let score = evaluateFor side board
+			modify $ \state -> state {scoreCacheSente = M.insert board score cache}
+			return score
+		Just score -> do
+			return score
+
 -- | Select optimal play for current side. Returns the play and score.
-searchBestPlay :: Int -> PlayerSide -> BoardState -> (Float, Play)
-searchBestPlay 0 side board = (evaluateFor side board, error "Terminal Node")
+searchBestPlay :: Int -> PlayerSide -> BoardState -> State SearchState (Float, Play)
+searchBestPlay 0 side board = do
+	score <- evaluateBoard side board
+	return (score, error "Terminal Node")
 searchBestPlay depth side board
-	|null plays = (evaluateFor side board, Resign)
-	|otherwise =
-		maximumBy (comparing fst) $
-			[(negate $ fst $ searchBestPlay (depth - 1) (flipSide side) (updateBoard play board), play) | play <- plays]
+	|null plays = do
+		score <- evaluateBoard side board
+		return (score, Resign)
+	|otherwise = do
+		branches <- mapM evaluatePlay plays
+		return $ maximumBy (comparing fst) branches
 	where
+		evaluatePlay play = do
+			(scoreEnemy, _) <- searchBestPlay (depth - 1) (flipSide side) (updateBoard play board)
+			return (negate $ scoreEnemy, play)
+
 		plays = legalMovesConsideringCheck side board
