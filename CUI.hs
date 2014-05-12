@@ -1,13 +1,44 @@
 module CUI where
+import Control.Monad
 import qualified Data.Map as M
 import Data.List
 
 import Base
+import Fukurou
 
+-- | Run an interactive human-vs-AI game on CUI.
 doCUIGame = do
-	oppSide <- askOpponentSide
-	putStr $ showBoard initialBoardState
-	askPlay
+	(senteIsAI, goteIsAI) <- askPlayerInfo
+	sente <- createPlayer Sente senteIsAI
+	gote <- createPlayer Gote goteIsAI
+	let game = Game (getPlayerName senteIsAI) (getPlayerName goteIsAI) [] initialBoardState
+	progressGUIGame sente gote game
+	where
+		getPlayerName False = "Human"
+		getPlayerName True = "Fukurou"
+
+		createPlayer side False = return Human
+		createPlayer side True = liftM AI $ createFukurou side
+
+data CUIPlayer
+	= Human
+	| AI Fukurou
+
+-- | Return end-game from initial game state.
+progressGUIGame :: CUIPlayer -> CUIPlayer -> Game -> IO Game
+progressGUIGame sente gote game@(Game _ _ plays board) = do
+	putStr $ showBoard board
+	play <- case getTurn game of
+		Sente -> getPlayFromPlayer sente
+		Gote -> getPlayFromPlayer gote
+
+	progressGUIGame sente gote $ addPlay play game
+
+
+getPlayFromPlayer :: CUIPlayer -> IO Play
+getPlayFromPlayer Human = CUI.askPlay
+getPlayFromPlayer (AI fukurou) = Fukurou.askPlay fukurou
+
 
 askPlay :: IO Play
 askPlay = do
@@ -15,16 +46,22 @@ askPlay = do
 	answer <- getLine
 	case answer of
 		(sX:sY:dX:dY:ty) -> return $ Play (read [sX], read [sY]) (read [dX], read [dY]) (read ty)
-		_ -> askPlay
+		_ -> CUI.askPlay
 
-askOpponentSide :: IO PlayerSide
-askOpponentSide = do
-	putStrLn "You're sente? [yn]"
+askPlayerInfo :: IO (Bool, Bool)
+askPlayerInfo = do
+	senteIsAI <- askYesNo "Sente is AI?"
+	goteIsAI <- askYesNo "Gote is AI?"
+	return (senteIsAI, goteIsAI)
+
+askYesNo :: String -> IO Bool
+askYesNo question = do
+	putStrLn $ question ++ " [yn]"
 	answer <- getLine
 	case answer of
-		"y" -> return Sente
-		"n" -> return Gote
-		_ -> askOpponentSide
+		"y" -> return True
+		"n" -> return False
+		_ -> askYesNo question
 
 
 showPieceJapanese :: Piece -> String

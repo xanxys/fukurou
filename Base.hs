@@ -1,3 +1,7 @@
+-- | This module provides easy-to-check, simple, inefficient code
+-- to represent Shogi rules.
+-- You can use this for UI, or automated testing of sophisticated board
+-- representation.
 module Base where
 import qualified Data.Map as M
 import Data.List
@@ -7,15 +11,39 @@ data Piece
 	| TO | NY | NK | NG      | UM | RY
 	deriving(Show, Read, Eq)
 
-data PlayerSide = Sente | Gote
+data PlayerSide = Sente | Gote deriving(Show, Eq, Ord)
+
+-- | A sente-gote pair of any symmetrical information.
+data Sengo a = Sengo a a
+
+
+flipSide :: PlayerSide -> PlayerSide
+flipSide Sente = Gote
+flipSide Gote = Sente
 
 -- | Easy to use (not efficient) representation of a board.
 data BoardState = BoardState (M.Map (Int, Int) (PlayerSide, Piece)) [Piece] [Piece]
 
 
 -- | from, to, piece type (after movement)
-data Play = Play (Int, Int) (Int, Int) Piece
+data Play
+	= Play (Int, Int) (Int, Int) Piece
+	| Resign
 
+-- | Record of a valid shogi game up to a certain point.
+data Game = Game {
+	senteName :: String,
+	goteName :: String,
+	plays :: [Play],
+	latestBoard :: BoardState}
+
+getTurn :: Game -> PlayerSide
+getTurn game
+	|even $ length $ plays game = Sente
+	|otherwise = Gote
+
+addPlay :: Play -> Game -> Game
+addPlay play game = game {plays = play : plays game}
 
 initialBoardState :: BoardState
 initialBoardState = BoardState (M.fromList pairs) [] []
@@ -32,3 +60,4 @@ initialBoardState = BoardState (M.fromList pairs) [] []
 			[((j, 9), (Sente, piece)) | (j, piece) <- zip [1..9] nonFuRow]
 
 		nonFuRow = [KY, KE, GI, KI, OU, KI, GI, KE, KY]
+
