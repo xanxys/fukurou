@@ -75,8 +75,11 @@ askPlay side = do
 	answer <- getLine
 	case answer of
 		"resign" -> return Resign
-		('0':'0':dX:dY:ty) -> return $ Put side (read [dX], read [dY]) (read ty)
-		(sX:sY:dX:dY:ty) -> return $ Move (read [sX], read [sY]) (read [dX], read [dY]) (read ty)
+		('0':'0':dX:dY:ty) -> return $ Put
+			side (makePosition (read [dX], read [dY])) (read ty)
+		(sX:sY:dX:dY:ty) -> return $ Move
+			(makePosition (read [sX], read [sY]))
+			(makePosition (read [dX], read [dY])) (read ty)
 		_ -> CUI.askPlay side
 
 askPlayerInfo :: IO (SengoPair Bool)
@@ -143,12 +146,12 @@ showBoard (BoardState onboardPieces (SengoPair sentePieces gotePieces))
 					|length pieces == 1 = showPiecesInKanji p
 					|otherwise = showPiecesInKanji p ++ show (length pieces)
 
-		showBoard :: M.Map (Int, Int) (PlayerSide, Piece) -> String
+		showBoard :: M.Map ValidPosition (PlayerSide, Piece) -> String
 		showBoard board = unlines $ map showRow [1..9]
 			where
 				showRow row =
 					"|" ++
-					concatMap (\i -> showPiece (i, row)) (reverse [1..9]) ++
+					concatMap (\i -> showPiece $ makePosition (i, row)) (reverse [1..9]) ++
 					"|" ++ showDigitInKanji row
 				showPiece index = case M.lookup index board of
 					Nothing -> " ・"

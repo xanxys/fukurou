@@ -15,6 +15,14 @@ data Piece
 	| OU
 	deriving(Show, Read, Eq, Ord)
 
+data ValidPosition = ValidPosition !Int !Int deriving(Show, Eq, Ord)
+
+makePosition :: (Int, Int) -> ValidPosition
+makePosition (x, y)
+	|1 <= x && x <= 9 && 1 <= y && y <= 9 = ValidPosition x y
+	|otherwise = error "Trying to create ValidPosition from an invalid position"
+
+
 -- | Promote promotable pieces, do nothing otherwise.
 promote :: Piece -> Piece
 promote FU = TO
@@ -59,13 +67,13 @@ flipSide Sente = Gote
 flipSide Gote = Sente
 
 -- | Easy to use (not efficient) representation of a board.
-data BoardState = BoardState (M.Map (Int, Int) (PlayerSide, Piece)) (SengoPair [Piece])
+data BoardState = BoardState (M.Map ValidPosition (PlayerSide, Piece)) (SengoPair [Piece])
 
 
 -- | from, to, piece type (after movement)
 data Play
-	= Move (Int, Int) (Int, Int) Piece
-	| Put PlayerSide (Int, Int) Piece
+	= Move ValidPosition ValidPosition Piece
+	| Put PlayerSide ValidPosition Piece
 	| Resign
 	deriving(Eq, Ord)
 
@@ -125,13 +133,13 @@ initialBoardState = BoardState (M.fromList pairs) (SengoPair [] [])
 	where
 		pairs = gotePairs ++ sentePairs
 		gotePairs =
-			[((j, 1), (Gote, piece)) | (j, piece) <- zip [1..9] nonFuRow] ++
-			[((8, 2), (Gote, HI)), ((2, 2), (Gote, KA))] ++
-			[((j, 3), (Gote, FU)) | j <- [1..9]]
+			[(makePosition (j, 1), (Gote, piece)) | (j, piece) <- zip [1..9] nonFuRow] ++
+			[(makePosition (8, 2), (Gote, HI)), (makePosition (2, 2), (Gote, KA))] ++
+			[(makePosition (j, 3), (Gote, FU)) | j <- [1..9]]
 		sentePairs =
-			[((j, 7), (Sente, FU)) | j <- [1..9]] ++
-			[((8, 8), (Sente, KA)), ((2, 8), (Sente, HI))] ++
-			[((j, 9), (Sente, piece)) | (j, piece) <- zip [1..9] nonFuRow]
+			[(makePosition (j, 7), (Sente, FU)) | j <- [1..9]] ++
+			[(makePosition (8, 8), (Sente, KA)), (makePosition (2, 8), (Sente, HI))] ++
+			[(makePosition (j, 9), (Sente, piece)) | (j, piece) <- zip [1..9] nonFuRow]
 
 		nonFuRow = [KY, KE, GI, KI, OU, KI, GI, KE, KY]
 
@@ -158,7 +166,7 @@ puttingMoves side (BoardState pieces captures) =
 	[Put side posTo pieceType | posTo <- S.toList puttablePositions, pieceType <- puttableTypes]
 	where		
 		puttablePositions = allPositions `S.difference` (M.keysSet pieces)
-		allPositions = S.fromList [(x, y) | x <- [1..9], y <- [1..9]]
+		allPositions = S.fromList [(ValidPosition x y) | x <- [1..9], y <- [1..9]]
 
 		puttableTypes = map head $ group $ sort $ lookupPair captures side
 
@@ -179,71 +187,73 @@ movingPlays side board@(BoardState pieces _) = concatMap generatePlaysFor friend
 		friendPieces = filter ((==side) . fst . snd) $ M.assocs pieces
 
 -- | Check if given position is enemy's or not.
-inEnemyTerritory :: PlayerSide -> (Int, Int) -> Bool
-inEnemyTerritory Sente (x, y) = y <= 3
-inEnemyTerritory Gote (x, y) = y >= 7
+inEnemyTerritory :: PlayerSide -> ValidPosition -> Bool
+inEnemyTerritory Sente (ValidPosition x y) = y <= 3
+inEnemyTerritory Gote (ValidPosition x y) = y >= 7
 
 
 -- | Movable positions considering other pieces but without mates.
-destinations :: BoardState -> PlayerSide -> (Int, Int) -> [(Int, Int)]
-destinations (BoardState pieces _) side pos = concatMap filterRun runs
+destinations :: BoardState -> PlayerSide -> ValidPosition -> [ValidPosition]
+destinations (BoardState pieces _) side posFrom = concatMap filterRun runs
 	where
-		runs = potentialDestinationsInfinite side pos piece
+		runs = potentialDestinationsInfinite side posFrom piece
 
 		filterRun (p:ps)
 			|not (inBoard p) = []
-			|otherwise = case M.lookup p pieces of
-				Nothing -> p:filterRun ps
+			|otherwise = case M.lookup validP pieces of
+				Nothing -> validP : filterRun ps
 				Just (blockerSide, blockerPos) ->
 					if blockerSide == side
 						then []  -- cannot move into friend's place
-						else [p]  -- can take enemy piece, but move past it
+						else [validP]  -- can take enemy piece, but move past it
+			where validP = makePosition p
 		filterRun [] = []
 
-		(_, piece) = pieces M.! pos
+		(_, piece) = pieces M.! posFrom
 		inBoard (x, y) = 1 <= x && x <= 9 && 1 <= y && y <= 9
 
 -- | Movable positions without considering any other pieces.
-potentialDestinationsInfinite :: PlayerSide -> (Int, Int) -> Piece -> [[(Int, Int)]]
+potentialDestinationsInfinite :: PlayerSide -> ValidPosition -> Piece -> [[(Int, Int)]]
 potentialDestinationsInfinite side pos piece
 	|side == Sente = potentialSenteDestinationsInfinite pos piece
-	|side == Gote = map (map flipY) $ potentialSenteDestinationsInfinite (flipY pos) piece
+	|side == Gote = map (map flipYRaw) $ potentialSenteDestinationsInfinite (flipY pos) piece
 	where
-		flipY (x, y) = (x, 10 - y)
+		flipYRaw (x, y) = (x, 10 - y)
+		flipY (ValidPosition x y) = ValidPosition x (10 - y)
 
 -- | Movable positions without considering any other pieces nor board boundary.
 -- Returns "runs", each of which is blocked by a piece.
-potentialSenteDestinationsInfinite :: (Int, Int) -> Piece -> [[(Int, Int)]]
-potentialSenteDestinationsInfinite (x, y) FU = [[(x, y - 1)]]
-potentialSenteDestinationsInfinite (x, y) KY = [[(x, y - i) | i <- [1..]]]
-potentialSenteDestinationsInfinite (x, y) KE = makeIndependent [(x - 1, y - 2), (x + 1, y - 2)]
-potentialSenteDestinationsInfinite (x, y) GI = makeIndependent [
+potentialSenteDestinationsInfinite :: ValidPosition -> Piece -> [[(Int, Int)]]
+potentialSenteDestinationsInfinite (ValidPosition x y) FU = [[(x, y - 1)]]
+potentialSenteDestinationsInfinite (ValidPosition x y) KY = [[(x, y - i) | i <- [1..]]]
+potentialSenteDestinationsInfinite (ValidPosition x y) KE = makeIndependent [(x - 1, y - 2), (x + 1, y - 2)]
+potentialSenteDestinationsInfinite (ValidPosition x y) GI = makeIndependent [
 	(x - 1, y - 1), (x, y - 1), (x + 1, y - 1),
 	(x - 1, y + 1), (x + 1, y + 1)]
-potentialSenteDestinationsInfinite (x, y) KI = makeIndependent [
+potentialSenteDestinationsInfinite (ValidPosition x y) KI = makeIndependent [
 	(x - 1, y - 1), (x, y - 1), (x + 1, y - 1),
 	(x - 1, y), (x + 1, y),
 	(x, y + 1)]
-potentialSenteDestinationsInfinite (x, y) KA = [
+potentialSenteDestinationsInfinite (ValidPosition x y) KA = [
 	[(x - i, y - i) | i <- [1..]],
 	[(x - i, y + i) | i <- [1..]],
 	[(x + i, y - i) | i <- [1..]],
 	[(x + i, y + i) | i <- [1..]]]
-potentialSenteDestinationsInfinite (x, y) HI = [
+potentialSenteDestinationsInfinite (ValidPosition x y) HI = [
 	[(x - i, y) | i <- [1..]],
 	[(x - i, y) | i <- [1..]],
 	[(x, y - i) | i <- [1..]],
 	[(x, y + i) | i <- [1..]]]
-potentialSenteDestinationsInfinite (x, y) OU = makeIndependent [(x + dx, y + dy) | dx <- [-1..1], dy <- [-1..1], dx /= 0 || dy /= 0]
+potentialSenteDestinationsInfinite (ValidPosition x y) OU = makeIndependent [(x + dx, y + dy) | dx <- [-1..1], dy <- [-1..1], dx /= 0 || dy /= 0]
 
 potentialSenteDestinationsInfinite pos TO = potentialSenteDestinationsInfinite pos KI
 potentialSenteDestinationsInfinite pos NY = potentialSenteDestinationsInfinite pos KI
 potentialSenteDestinationsInfinite pos NK = potentialSenteDestinationsInfinite pos KI
 potentialSenteDestinationsInfinite pos NG = potentialSenteDestinationsInfinite pos KI
-potentialSenteDestinationsInfinite pos@(x, y) UM =
+potentialSenteDestinationsInfinite pos@(ValidPosition x y) UM =
 	makeIndependent [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)] ++
 	potentialSenteDestinationsInfinite pos KA
-potentialSenteDestinationsInfinite pos@(x, y) RY =
+potentialSenteDestinationsInfinite pos@(ValidPosition x y) RY =
 	makeIndependent [(x - 1, y - 1), (x + 1, y - 1), (x - 1, y + 1), (x + 1, y + 1)] ++
 	potentialSenteDestinationsInfinite pos HI
 
