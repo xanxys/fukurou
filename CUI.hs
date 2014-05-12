@@ -55,8 +55,16 @@ continueGame players game = do
 			putStrLn "illegal move; try again"
 			continueGame players game
 		Just game' -> do
+			putStrLn $ showCSAPlay play
 			mapM_ (flip notifyPlayer game') $ flattenPair players
 			progressGUIGame players game'
+
+showCSAPlay (Move (ValidPosition sx sy) (ValidPosition dx dy) ty) =
+	show sx ++ show sy ++ show dx ++ show dy ++ show ty
+showCSAPlay (Put side (ValidPosition dx dy) ty) =
+	"00" ++ show dx ++ show dy ++ show ty
+showCSAPlay Resign =
+	"%RESIGN%"
 
 -- | Notify all moves.
 notifyPlayer :: CUIPlayer -> Game -> IO ()

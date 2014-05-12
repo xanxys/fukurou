@@ -17,12 +17,12 @@ data Fukurou = Fukurou (MVar StdGen) PlayerSide (MVar Game)
 
 
 evaluateForSente :: BoardState -> Float
-evaluateForSente state@(BoardState pieces (SengoPair cpSente cpGote)) = 
-	(if isCheck Sente state then -500 else 0) +
-	(if isCheck Gote state then 500 else 0) +
+evaluateForSente state@(BoardState pieces (SengoPair cpSente cpGote)) =
+	(if null plays then -1000 else 0) +
 	sum (map valueOfPiece $ map snd piecesSente ++ cpSente) +
 	negate (sum $ map valueOfPiece $ map snd piecesGote ++ cpGote)
 	where
+		plays = legalMovesConsideringCheck Sente state
 		(piecesSente, piecesGote) = partition ((== Sente) . fst) $ M.elems pieces
 		
 		valueOfPiece FU = 1
@@ -68,7 +68,7 @@ askPlay (Fukurou mRandomGen side mGame) = do
 	case legalMovesConsideringCheck side $ latestBoard game of
 		[] -> return Resign
 		plays -> do
-			let (score, play) = searchBestPlay 2 side (latestBoard game)
+			let (score, play) = searchBestPlay 3 side (latestBoard game)
 			putStrLn $ "Score: " ++ show score
 			return play
 
@@ -79,6 +79,6 @@ searchBestPlay depth side board
 	|null plays = (evaluateFor side board, Resign)
 	|otherwise =
 		maximumBy (comparing fst) $
-			[(fst $ searchBestPlay (depth - 1) (flipSide side) (updateBoard play board), play) | play <- plays]
+			[(negate $ fst $ searchBestPlay (depth - 1) (flipSide side) (updateBoard play board), play) | play <- plays]
 	where
 		plays = legalMovesConsideringCheck side board
