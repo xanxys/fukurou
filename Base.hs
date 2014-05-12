@@ -109,10 +109,9 @@ initialBoardState = BoardState (M.fromList pairs) (SengoPair [] [])
 	where
 		pairs = gotePairs ++ sentePairs
 		gotePairs =
-			[((j, 1), (Gote, FU)) | j <- [1..9]] ++
+			[((j, 1), (Gote, piece)) | (j, piece) <- zip [1..9] nonFuRow] ++
 			[((8, 2), (Gote, HI)), ((2, 2), (Gote, KA))] ++
-			[((j, 3), (Gote, piece)) | (j, piece) <- zip [1..9] nonFuRow]
-
+			[((j, 3), (Gote, FU)) | j <- [1..9]]
 		sentePairs =
 			[((j, 7), (Sente, FU)) | j <- [1..9]] ++
 			[((8, 8), (Sente, KA)), ((2, 8), (Sente, HI))] ++
