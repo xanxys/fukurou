@@ -148,7 +148,8 @@ initialBoardState = BoardState (M.fromList pairs) (SengoPair [] [])
 isCheck :: PlayerSide -> BoardState -> Bool
 isCheck side state@(BoardState pieces _) = any takesKing $ enemyMoves
 	where
-		enemyMoves = legalMoves (flipSide side) state
+		-- Putting plays cannot capture king, moving plays is enough.
+		enemyMoves = movingPlays (flipSide side) state
 		takesKing (Move _ dst _) = dst == kingPos
 		takesKing (Put _ _ _) = False
 		[(kingPos, _)] = filter ((== (side, OU)) . snd) $ M.assocs pieces
