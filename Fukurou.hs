@@ -6,11 +6,43 @@
 module Fukurou where
 import Control.Concurrent.MVar
 import Control.Monad
+import Data.List
+import qualified Data.Map as M
+import Data.Ord
 import System.Random
 
 import Base
 
 data Fukurou = Fukurou (MVar StdGen) PlayerSide (MVar Game)
+
+
+evaluateForSente :: BoardState -> Float
+evaluateForSente state@(BoardState pieces (SengoPair cpSente cpGote)) = 
+	(if isCheck Sente state then -500 else 0) +
+	(if isCheck Gote state then 500 else 0) +
+	sum (map valueOfPiece $ map snd piecesSente ++ cpSente) +
+	negate (sum $ map valueOfPiece $ map snd piecesGote ++ cpGote)
+	where
+		(piecesSente, piecesGote) = partition ((== Sente) . fst) $ M.elems pieces
+		
+		valueOfPiece FU = 1
+		valueOfPiece KY = 3
+		valueOfPiece KE = 4
+		valueOfPiece GI = 5
+		valueOfPiece KI = 6
+		valueOfPiece KA = 8
+		valueOfPiece HI = 10
+		valueOfPiece TO = 7
+		valueOfPiece NY = 6
+		valueOfPiece NK = 6
+		valueOfPiece NG = 6
+		valueOfPiece UM = 10
+		valueOfPiece RY = 12
+		valueOfPiece OU = 0
+
+evaluateFor :: PlayerSide -> BoardState -> Float
+evaluateFor Sente state = evaluateForSente state
+evaluateFor Gote state = negate $ evaluateForSente state
 
 -- | Create an AI player. Player may or may not be thinking in the background.
 -- A Player cannot adjust to illegal proceedings of a game, or multiple games
@@ -36,7 +68,17 @@ askPlay (Fukurou mRandomGen side mGame) = do
 	case legalMovesConsideringCheck side $ latestBoard game of
 		[] -> return Resign
 		plays -> do
-			gen <- takeMVar mRandomGen
-			let (index, gen') = randomR (0, length plays - 1) gen
-			putMVar mRandomGen gen'
-			return $ plays !! index
+			let (score, play) = searchBestPlay 2 side (latestBoard game)
+			putStrLn $ "Score: " ++ show score
+			return play
+
+-- | Select optimal play for current side. Returns the play and score.
+searchBestPlay :: Int -> PlayerSide -> BoardState -> (Float, Play)
+searchBestPlay 0 side board = (evaluateFor side board, error "Terminal Node")
+searchBestPlay depth side board
+	|null plays = (evaluateFor side board, Resign)
+	|otherwise =
+		maximumBy (comparing fst) $
+			[(fst $ searchBestPlay (depth - 1) (flipSide side) (updateBoard play board), play) | play <- plays]
+	where
+		plays = legalMovesConsideringCheck side board
