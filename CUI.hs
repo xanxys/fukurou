@@ -124,19 +124,23 @@ showDigitInZenkakuArabic d
 
 -- | Convert `BoardState` to multi-line string.
 showBoard :: BoardState -> String
-showBoard (BoardState onboardPieces (SengoPair sente_pieces gote_pieces))
+showBoard (BoardState onboardPieces (SengoPair sentePieces gotePieces))
 	= unlines $ [
-		showPosession sente_pieces,
+		showPosession gotePieces,
 		(concat $ map (\column -> " " ++ showDigitInZenkakuArabic column) $ reverse [1..9]),
 		horizontalSeparator,
 		showBoard onboardPieces ++
 		horizontalSeparator,
-		showPosession gote_pieces]
+		showPosession sentePieces]
 	where
 		horizontalSeparator = replicate (9 * 3 + 2) '-'
 
 		showPosession :: [Piece] -> String
-		showPosession pieces = "持駒:" ++ unwords (map showPiecesInKanji $ sort pieces)
+		showPosession pieces = "持駒:" ++ unwords (map showPieceGroup $ group $ sort pieces)
+			where
+				showPieceGroup pieces@(p:_)
+					|length pieces == 1 = showPiecesInKanji p
+					|otherwise = showPiecesInKanji p ++ show (length pieces)
 
 		showBoard :: M.Map (Int, Int) (PlayerSide, Piece) -> String
 		showBoard board = unlines $ map showRow [1..9]
@@ -149,5 +153,3 @@ showBoard (BoardState onboardPieces (SengoPair sente_pieces gote_pieces))
 					Nothing -> " ・"
 					Just (Sente, p) -> " " ++ showPiecesInKanji p
 					Just (Gote, p) -> "v" ++ showPiecesInKanji p
-
-
