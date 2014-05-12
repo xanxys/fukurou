@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 -- | Shogi "engine" representing a single AI player.
 -- playing ability is inherently limited by time and memory;
 -- so it's exposed as IO monad.
@@ -7,9 +8,12 @@ module Fukurou where
 import Control.Concurrent.MVar
 import Control.Monad
 import Control.Monad.State.Lazy
+import Data.Array.Unboxed
+import Data.Bits
 import Data.List
 import qualified Data.Map as M
 import Data.Ord
+import Data.Word
 import System.Random
 import Text.Printf
 
@@ -17,6 +21,50 @@ import Base
 
 data Fukurou = Fukurou (MVar StdGen) PlayerSide (MVar Game)
 
+type CellState = Word8 
+
+-- | Equivalent to BoardState, but move generation and evaluation is fater.
+data FastBoard = FastBoard !(UArray ValidPosition Word8) !(Array Piece Int) !(Array Piece Int)
+	deriving(Eq, Ord)
+
+compressCell :: Maybe (PlayerSide, Piece) -> CellState
+compressCell Nothing = 0
+compressCell (Just (side, piece)) = existFlag .|. sideFlag .|. promoteFlag .|. typeFlag (unpromote piece)
+	where
+		existFlag = 0x80
+		sideFlag = if side == Sente then 0x40 else 0
+		promoteFlag = if elem piece [TO, NY, NK, NG, UM, RY]  then 0x20 else 0
+		typeFlag FU = 0
+		typeFlag KY = 1
+		typeFlag KE = 2
+		typeFlag GI = 3
+		typeFlag KI = 4
+		typeFlag KA = 5
+		typeFlag HI = 6
+		typeFlag OU = 7
+
+compressBoard :: BoardState -> FastBoard
+compressBoard (BoardState pieces (SengoPair senteCP goteCP)) = FastBoard
+	(listArray area $ map (compressCell . flip M.lookup pieces) $ range area)
+	(listArray pieceTypeRange $ map (count senteCP) $ range pieceTypeRange)
+	(listArray pieceTypeRange $ map (count goteCP) $ range pieceTypeRange)
+	where
+		count !pieces !target = sum $ map (\x -> if x == target then 1 else 0) pieces
+		area = (ValidPosition 1 1, ValidPosition 9 9)
+		pieceTypeRange = (FU, HI)
+
+decompressBoard :: FastBoard -> BoardState
+decompressBoard _ = undefined
+
+instance Ix Piece where
+	range (FU, HI) = [FU,  KY, KE, GI, KI, KA, HI]
+	inRange (a, b) x = a <= x && x <= b
+
+instance Ix ValidPosition where
+	range (ValidPosition x0 y0, ValidPosition x1 y1) = [ValidPosition x y | x <- [x0..x1], y <- [y0..y1]]
+	inRange (ValidPosition x0 y0, ValidPosition x1 y1) (ValidPosition x y) =
+		(x0 <= x && x <= x1) &&
+		(y0 <= y && y <= y1)
 
 evaluateForSente :: BoardState -> Float
 evaluateForSente state@(BoardState pieces (SengoPair cpSente cpGote)) =
@@ -71,7 +119,7 @@ askPlay (Fukurou mRandomGen side mGame) = do
 		[] -> return Resign
 		plays -> do
 			let ((score, play), state) = runState
-				(searchBestPlay (-10000) 10000 4 side (latestBoard game))
+				(searchBestPlay (-10000) 10000 3 side (latestBoard game))
 				(SearchState {numberOfBoards = 0, scoreCacheSente = M.empty})
 			printf "#boards: %d\n" (numberOfBoards state)
 			printf "#unique boards: %d\n" (M.size $ scoreCacheSente state)
@@ -104,14 +152,14 @@ searchBestPlay :: Float -> Float -> Int -> PlayerSide -> BoardState -> State Sea
 searchBestPlay _ _ 0 side board = do
 	score <- evaluateBoard side board
 	return (score, error "Terminal Node")
-searchBestPlay alpha beta depth side board
+searchBestPlay !alpha !beta !depth !side !board
 	|null plays = do
 		score <- evaluateBoard side board
 		return (score, Resign)
 	|otherwise = findBestPlay alpha undefined plays
 	where
-		findBestPlay currentBestScore currentBestPlay [] = return (currentBestScore, currentBestPlay)
-		findBestPlay currentBestScore currentBestPlay (play:plays)
+		findBestPlay !currentBestScore currentBestPlay [] = return (currentBestScore, currentBestPlay)
+		findBestPlay !currentBestScore currentBestPlay (play:plays)
 			|currentBestScore > beta = return (currentBestScore, currentBestPlay)
 			|otherwise = do
 				(scoreEnemy, _) <- searchBestPlay (-beta) (-currentBestScore) (depth - 1) (flipSide side) (updateBoard play board)

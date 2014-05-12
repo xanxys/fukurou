@@ -159,7 +159,6 @@ legalMovesConsideringCheck side board = filter (not . leadsToCheck) $ legalMoves
 		leadsToCheck play = isCheck side (updateBoard play board)
 
 -- | Legal moves: movings or puttings of pieces, excluding Resign.
--- TODO: implement putting moves
 legalMoves :: PlayerSide -> BoardState -> [Play]
 legalMoves side board = movingPlays side board ++ puttingMoves side board
 
