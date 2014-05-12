@@ -41,6 +41,9 @@ data SengoPair a = SengoPair a a
 instance Functor SengoPair where
 	fmap f (SengoPair s g) = SengoPair (f s) (f g)
 
+flattenPair :: SengoPair a -> [a]
+flattenPair (SengoPair s g) = [s, g]
+
 lookupPair :: SengoPair a -> PlayerSide -> a
 lookupPair (SengoPair s _) Sente = s
 lookupPair (SengoPair _ g) Gote = g

@@ -13,8 +13,12 @@ doCUIGame = do
 	isAI@(SengoPair senteIsAI goteIsAI) <- askPlayerInfo
 	sente <- createPlayer Sente senteIsAI
 	gote <- createPlayer Gote goteIsAI
+	let players = (SengoPair sente gote)
+	
 	let game = Game (fmap getPlayerName isAI) [] initialBoardState
-	progressGUIGame (SengoPair sente gote) game
+	mapM_ (flip notifyPlayer game) $ flattenPair players
+
+	progressGUIGame players game
 	where
 		getPlayerName False = "Human"
 		getPlayerName True = "Fukurou"
@@ -51,8 +55,13 @@ continueGame players game = do
 			putStrLn "illegal move; try again"
 			continueGame players game
 		Just game' -> do
+			mapM_ (flip notifyPlayer game') $ flattenPair players
 			progressGUIGame players game'
 
+-- | Notify all moves.
+notifyPlayer :: CUIPlayer -> Game -> IO ()
+notifyPlayer Human _ = return ()
+notifyPlayer (AI fukurou) game = Fukurou.notifyPlay fukurou game
 
 getPlayFromPlayer :: CUIPlayer -> IO Play
 getPlayFromPlayer Human = CUI.askPlay
