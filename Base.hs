@@ -4,6 +4,7 @@
 -- representation.
 module Base where
 import qualified Data.Map as M
+import Data.Functor
 import Data.List
 
 data Piece
@@ -14,15 +15,22 @@ data Piece
 data PlayerSide = Sente | Gote deriving(Show, Eq, Ord)
 
 -- | A sente-gote pair of any symmetrical information.
-data Sengo a = Sengo a a
+-- instead of using tuples, use Sengo to avoid stupid mistakes.
+data SengoPair a = SengoPair a a
 
+instance Functor SengoPair where
+	fmap f (SengoPair s g) = SengoPair (f s) (f g)
+
+lookupPair :: SengoPair a -> PlayerSide -> a
+lookupPair (SengoPair s _) Sente = s
+lookupPair (SengoPair _ g) Gote = g
 
 flipSide :: PlayerSide -> PlayerSide
 flipSide Sente = Gote
 flipSide Gote = Sente
 
 -- | Easy to use (not efficient) representation of a board.
-data BoardState = BoardState (M.Map (Int, Int) (PlayerSide, Piece)) [Piece] [Piece]
+data BoardState = BoardState (M.Map (Int, Int) (PlayerSide, Piece)) (SengoPair [Piece])
 
 
 -- | from, to, piece type (after movement)
@@ -33,8 +41,7 @@ data Play
 
 -- | Record of a valid shogi game up to a certain point.
 data Game = Game {
-	senteName :: String,
-	goteName :: String,
+	playerNames :: SengoPair String,
 	plays :: [Play],
 	latestBoard :: BoardState}
 
@@ -55,7 +62,7 @@ winningSide game
 	|otherwise = Nothing
 
 initialBoardState :: BoardState
-initialBoardState = BoardState (M.fromList pairs) [] []
+initialBoardState = BoardState (M.fromList pairs) (SengoPair [] [])
 	where
 		pairs = gotePairs ++ sentePairs
 		gotePairs =

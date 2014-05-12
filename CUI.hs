@@ -10,11 +10,11 @@ import Fukurou
 
 -- | Run an interactive human-vs-AI game on CUI.
 doCUIGame = do
-	(senteIsAI, goteIsAI) <- askPlayerInfo
+	isAI@(SengoPair senteIsAI goteIsAI) <- askPlayerInfo
 	sente <- createPlayer Sente senteIsAI
 	gote <- createPlayer Gote goteIsAI
-	let game = Game (getPlayerName senteIsAI) (getPlayerName goteIsAI) [] initialBoardState
-	progressGUIGame sente gote game
+	let game = Game (fmap getPlayerName isAI) [] initialBoardState
+	progressGUIGame (SengoPair sente gote) game
 	where
 		getPlayerName False = "Human"
 		getPlayerName True = "Fukurou"
@@ -27,33 +27,31 @@ data CUIPlayer
 	| AI Fukurou
 
 -- | Return end-game from a game state.
-progressGUIGame :: CUIPlayer -> CUIPlayer -> Game -> IO Game
-progressGUIGame sente gote game = do
+progressGUIGame :: SengoPair CUIPlayer -> Game -> IO Game
+progressGUIGame players game = do
 	case winningSide game of
 		Just side -> finishGame side game >> return game
-		Nothing -> continueGame sente gote game
+		Nothing -> continueGame players game
 
 finishGame :: PlayerSide -> Game -> IO ()
 finishGame side game = do
 	putStrLn $ show side ++ " won!"
 
 -- | Return end-game from a non-finished game state.
-continueGame :: CUIPlayer -> CUIPlayer -> Game -> IO Game
-continueGame sente gote game = do
+continueGame :: SengoPair CUIPlayer -> Game -> IO Game
+continueGame players game = do
 	putStrLn ""
 	putStrLn $ show (1 + length (plays game)) ++ "手目: " ++ show (getTurn game)
 
 	putStr $ showBoard $ latestBoard game
-	play <- case getTurn game of
-		Sente -> getPlayFromPlayer sente
-		Gote -> getPlayFromPlayer gote
+	play <- getPlayFromPlayer $ lookupPair players (getTurn game)
 	
 	case addPlay play game of
 		Nothing -> do
 			putStrLn "illegal move; try again"
-			continueGame sente gote game
+			continueGame players game
 		Just game' -> do
-			progressGUIGame sente gote game'
+			progressGUIGame players game'
 
 
 getPlayFromPlayer :: CUIPlayer -> IO Play
@@ -71,11 +69,11 @@ askPlay = do
 		(sX:sY:dX:dY:ty) -> return $ Play (read [sX], read [sY]) (read [dX], read [dY]) (read ty)
 		_ -> CUI.askPlay
 
-askPlayerInfo :: IO (Bool, Bool)
+askPlayerInfo :: IO (SengoPair Bool)
 askPlayerInfo = do
 	senteIsAI <- askYesNo "Sente is AI?"
 	goteIsAI <- askYesNo "Gote is AI?"
-	return (senteIsAI, goteIsAI)
+	return $ SengoPair senteIsAI goteIsAI
 
 askYesNo :: String -> IO Bool
 askYesNo question = do
@@ -117,12 +115,12 @@ showDigitInZenkakuArabic d
 
 -- | Convert `BoardState` to multi-line string.
 showBoard :: BoardState -> String
-showBoard (BoardState board_pieces sente_pieces gote_pieces)
+showBoard (BoardState onboardPieces (SengoPair sente_pieces gote_pieces))
 	= unlines $ [
 		showPosession sente_pieces,
 		(concat $ map (\column -> " " ++ showDigitInZenkakuArabic column) $ reverse [1..9]),
 		horizontalSeparator,
-		showBoard board_pieces ++
+		showBoard onboardPieces ++
 		horizontalSeparator,
 		showPosession gote_pieces]
 	where
