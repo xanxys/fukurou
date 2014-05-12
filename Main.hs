@@ -4,11 +4,17 @@ import Data.List
 data Piece
 	= FU | KY | KE | GI | KI | KA | HI | OU
 	| TO | NY | NK | NG      | UM | RY
+	deriving(Show, Read, Eq)
 
 data PlayerSide = Sente | Gote
 
 -- | Easy to use (not efficient) representation of a board.
 data BoardState = BoardState (M.Map (Int, Int) (PlayerSide, Piece)) [Piece] [Piece]
+
+
+-- | from, to, piece type (after movement)
+data Play = Play (Int, Int) (Int, Int) Piece
+
 
 initialBoardState :: BoardState
 initialBoardState = BoardState (M.fromList pairs) [] []
@@ -87,4 +93,23 @@ showBoard (BoardState board_pieces sente_pieces gote_pieces)
 
 
 main = do
+	oppSide <- askOpponentSide
 	putStr $ showBoard initialBoardState
+	askPlay
+
+askPlay :: IO Play
+askPlay = do
+	putStrLn "Your play? (CSA-style, e.g. 0055KA=五５角打 2829TO=二９歩成)"
+	answer <- getLine
+	case answer of
+		(sX:sY:dX:dY:ty) -> return $ Play (read [sX], read [sY]) (read [dX], read [dY]) (read ty)
+		_ -> askPlay
+
+askOpponentSide :: IO PlayerSide
+askOpponentSide = do
+	putStrLn "You're sente? [yn]"
+	answer <- getLine
+	case answer of
+		"y" -> return Sente
+		"n" -> return Gote
+		_ -> askOpponentSide
