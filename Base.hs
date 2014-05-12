@@ -123,6 +123,18 @@ initialBoardState = BoardState (M.fromList pairs) (SengoPair [] [])
 
 		nonFuRow = [KY, KE, GI, KI, OU, KI, GI, KE, KY]
 
+isCheck :: PlayerSide -> BoardState -> Bool
+isCheck side state@(BoardState pieces _) = any takesKing $ enemyMoves
+	where
+		enemyMoves = legalMoves (flipSide side) state
+		takesKing (Play _ dst _) = dst == kingPos
+		[(kingPos, _)] = filter ((== (side, OU)) . snd) $ M.assocs pieces
+
+legalMovesConsideringCheck :: PlayerSide -> BoardState -> [Play]
+legalMovesConsideringCheck side board = filter (not . leadsToCheck) $ legalMoves side board
+	where
+		leadsToCheck play = isCheck side (updateBoard play board)
+
 -- | Legal moves: movings or puttings of pieces, excluding Resign.
 -- TODO: implement putting moves
 legalMoves :: PlayerSide -> BoardState -> [Play]
