@@ -241,7 +241,7 @@ potentialSenteDestinationsInfinite (ValidPosition x y) KA = [
 	[(x + i, y + i) | i <- [1..]]]
 potentialSenteDestinationsInfinite (ValidPosition x y) HI = [
 	[(x - i, y) | i <- [1..]],
-	[(x - i, y) | i <- [1..]],
+	[(x + i, y) | i <- [1..]],
 	[(x, y - i) | i <- [1..]],
 	[(x, y + i) | i <- [1..]]]
 potentialSenteDestinationsInfinite (ValidPosition x y) OU = makeIndependent [(x + dx, y + dy) | dx <- [-1..1], dy <- [-1..1], dx /= 0 || dy /= 0]
