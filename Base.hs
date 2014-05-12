@@ -29,6 +29,7 @@ data BoardState = BoardState (M.Map (Int, Int) (PlayerSide, Piece)) [Piece] [Pie
 data Play
 	= Play (Int, Int) (Int, Int) Piece
 	| Resign
+	deriving(Eq)
 
 -- | Record of a valid shogi game up to a certain point.
 data Game = Game {
@@ -42,8 +43,16 @@ getTurn game
 	|even $ length $ plays game = Sente
 	|otherwise = Gote
 
-addPlay :: Play -> Game -> Game
-addPlay play game = game {plays = play : plays game}
+-- | Add a play if it's a legal play.
+addPlay :: Play -> Game -> Maybe Game
+addPlay play game = Just $ game {plays = play : plays game}
+
+-- TODO: consider draw case.
+-- TODO: implement check-mate
+winningSide :: Game -> Maybe PlayerSide
+winningSide game
+	|not (null $ plays game) && head (plays game) == Resign = Just $ getTurn game
+	|otherwise = Nothing
 
 initialBoardState :: BoardState
 initialBoardState = BoardState (M.fromList pairs) [] []
