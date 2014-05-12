@@ -9,8 +9,9 @@ import Data.List
 import Data.Maybe
 
 data Piece
-	= FU | KY | KE | GI | KI | KA | HI | OU
+	= FU | KY | KE | GI | KI | KA | HI
 	| TO | NY | NK | NG      | UM | RY
+	| OU
 	deriving(Show, Read, Eq, Ord)
 
 -- | Promote promotable pieces, do nothing otherwise.
@@ -93,7 +94,7 @@ updateBoard :: Play -> BoardState -> BoardState
 updateBoard (Play posFrom posTo pieceTypeTo) (BoardState pieces captures)
 	= case M.lookup posTo pieces of
 		Nothing -> BoardState pieces' captures  -- no capture
-		Just (_, pieceTypeToBeCaptured) -> BoardState pieces' (captures' pieceTypeToBeCaptured)
+		Just (_, pieceTypeToBeCaptured) -> BoardState pieces' (captures' $ unpromote pieceTypeToBeCaptured)
 	where
 		pieces' = M.insert posTo (side, pieceTypeTo) $ M.delete posFrom pieces
 		captures' newPieceType = partiallyModifyPair side (newPieceType:) captures

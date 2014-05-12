@@ -14,7 +14,7 @@ doCUIGame = do
 	sente <- createPlayer Sente senteIsAI
 	gote <- createPlayer Gote goteIsAI
 	let players = (SengoPair sente gote)
-	
+
 	let game = Game (fmap getPlayerName isAI) [] initialBoardState
 	mapM_ (flip notifyPlayer game) $ flattenPair players
 
@@ -94,22 +94,22 @@ askYesNo question = do
 		_ -> askYesNo question
 
 
-showPieceJapanese :: Piece -> String
-showPieceJapanese FU = "歩"
-showPieceJapanese KY = "香"
-showPieceJapanese KE = "桂"
-showPieceJapanese GI = "銀"
-showPieceJapanese KI = "金"
-showPieceJapanese KA = "角"
-showPieceJapanese HI = "飛"
-showPieceJapanese OU = "玉"
+showPiecesInKanji :: Piece -> String
+showPiecesInKanji FU = "歩"
+showPiecesInKanji KY = "香"
+showPiecesInKanji KE = "桂"
+showPiecesInKanji GI = "銀"
+showPiecesInKanji KI = "金"
+showPiecesInKanji KA = "角"
+showPiecesInKanji HI = "飛"
+showPiecesInKanji OU = "玉"
 
-showPieceJapanese TO = "と"
-showPieceJapanese NY = "杏"
-showPieceJapanese NK = "圭"
-showPieceJapanese NG = "全"
-showPieceJapanese UM = "馬"
-showPieceJapanese RY = "龍"
+showPiecesInKanji TO = "と"
+showPiecesInKanji NY = "杏"
+showPiecesInKanji NK = "圭"
+showPiecesInKanji NG = "全"
+showPiecesInKanji UM = "馬"
+showPiecesInKanji RY = "龍"
 
 showDigitInKanji :: Int -> String
 showDigitInKanji d
@@ -136,7 +136,7 @@ showBoard (BoardState onboardPieces (SengoPair sente_pieces gote_pieces))
 		horizontalSeparator = replicate (9 * 3 + 2) '-'
 
 		showPosession :: [Piece] -> String
-		showPosession _ = "持駒:"
+		showPosession pieces = "持駒:" ++ unwords (map showPiecesInKanji $ sort pieces)
 
 		showBoard :: M.Map (Int, Int) (PlayerSide, Piece) -> String
 		showBoard board = unlines $ map showRow [1..9]
@@ -147,7 +147,7 @@ showBoard (BoardState onboardPieces (SengoPair sente_pieces gote_pieces))
 					"|" ++ showDigitInKanji row
 				showPiece index = case M.lookup index board of
 					Nothing -> " ・"
-					Just (Sente, p) -> " " ++ showPieceJapanese p
-					Just (Gote, p) -> "v" ++ showPieceJapanese p
+					Just (Sente, p) -> " " ++ showPiecesInKanji p
+					Just (Gote, p) -> "v" ++ showPiecesInKanji p
 
 
