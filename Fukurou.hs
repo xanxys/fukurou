@@ -71,7 +71,7 @@ askPlay (Fukurou mRandomGen side mGame) = do
 		[] -> return Resign
 		plays -> do
 			let ((score, play), state) = runState
-				(searchBestPlay 3 side (latestBoard game))
+				(searchBestPlay (-10000) 10000 4 side (latestBoard game))
 				(SearchState {numberOfBoards = 0, scoreCacheSente = M.empty})
 			printf "#boards: %d\n" (numberOfBoards state)
 			printf "#unique boards: %d\n" (M.size $ scoreCacheSente state)
@@ -87,6 +87,8 @@ data SearchState = SearchState {
 evaluateBoard :: PlayerSide -> BoardState -> State SearchState Float
 evaluateBoard side board = do
 	modify $ \state -> state {numberOfBoards = numberOfBoards state + 1}
+	return $! evaluateFor side board
+	{-
 	cache <- liftM scoreCacheSente get
 	case M.lookup board cache of
 		Nothing -> do
@@ -95,22 +97,27 @@ evaluateBoard side board = do
 			return score
 		Just score -> do
 			return score
+	-}
 
 -- | Select optimal play for current side. Returns the play and score.
-searchBestPlay :: Int -> PlayerSide -> BoardState -> State SearchState (Float, Play)
-searchBestPlay 0 side board = do
+searchBestPlay :: Float -> Float -> Int -> PlayerSide -> BoardState -> State SearchState (Float, Play)
+searchBestPlay _ _ 0 side board = do
 	score <- evaluateBoard side board
 	return (score, error "Terminal Node")
-searchBestPlay depth side board
+searchBestPlay alpha beta depth side board
 	|null plays = do
 		score <- evaluateBoard side board
 		return (score, Resign)
-	|otherwise = do
-		branches <- mapM evaluatePlay plays
-		return $ maximumBy (comparing fst) branches
+	|otherwise = findBestPlay alpha undefined plays
 	where
-		evaluatePlay play = do
-			(scoreEnemy, _) <- searchBestPlay (depth - 1) (flipSide side) (updateBoard play board)
-			return (negate $ scoreEnemy, play)
+		findBestPlay currentBestScore currentBestPlay [] = return (currentBestScore, currentBestPlay)
+		findBestPlay currentBestScore currentBestPlay (play:plays)
+			|currentBestScore > beta = return (currentBestScore, currentBestPlay)
+			|otherwise = do
+				(scoreEnemy, _) <- searchBestPlay (-beta) (-currentBestScore) (depth - 1) (flipSide side) (updateBoard play board)
+				let score = (-scoreEnemy)
+				if score > currentBestScore
+					then findBestPlay score play plays
+					else findBestPlay currentBestScore currentBestPlay plays
 
 		plays = legalMovesConsideringCheck side board
