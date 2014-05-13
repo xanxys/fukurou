@@ -213,7 +213,7 @@ destinations (BoardState pieces _) side posFrom = concatMap filterRun runs
 				Just (blockerSide, blockerPos) ->
 					if blockerSide == side
 						then []  -- cannot move into friend's place
-						else [validP]  -- can take enemy piece, but move past it
+						else [validP]  -- can take enemy piece, but cannot move past it
 			where validP = makePosition p
 		filterRun [] = []
 
