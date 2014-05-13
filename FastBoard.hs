@@ -15,8 +15,6 @@ import Debug.Trace
 
 import Base
 
-type CellState = Word8 
-
 -- | Equivalent to BoardState, but move generation is faster.
 data FastBoard = FastBoard (M.Map ValidPosition (ST.Pair PlayerSide Piece)) (SengoPair [Piece])
 	deriving(Eq, Ord, Show)
@@ -28,28 +26,6 @@ compressBoard (BoardState pieces pair) = FastBoard
 decompressBoard :: FastBoard -> BoardState
 decompressBoard (FastBoard pieces pair) = BoardState
 	(M.map (\(side ST.:!: piece) -> (side, piece)) pieces) pair
-
-{-
-instance Ix Piece where
-	range (FU, HI) = [FU, KY, KE, GI, KI, KA, HI]
-	inRange (a, b) x = a <= x && x <= b
-	index (FU, _) FU = 0
-	index (FU, _) KY = 1
-	index (FU, _) KE = 2
-	index (FU, _) GI = 3
-	index (FU, _) KI = 4
-	index (FU, _) KA = 5
-	index (FU, _) HI = 6
--}
-
-{-
-instance Ix ValidPosition where
-	range (ValidPosition x0 y0, ValidPosition x1 y1) = [ValidPosition x y | x <- [x0..x1], y <- [y0..y1]]
-	index (ValidPosition x0 y0, ValidPosition x1 y1) (ValidPosition x y) = (x - x0) * (y1 - y0 + 1) + (y - y0)
-	inRange (ValidPosition x0 y0, ValidPosition x1 y1) (ValidPosition x y) =
-		(x0 <= x && x <= x1) && (y0 <= y && y <= y1)
--}
-
 
 -- | Apply a known-to-be-legal move to given `FastBoard`.
 updateBoard :: Play -> FastBoard -> FastBoard
@@ -110,7 +86,7 @@ movingPlays !side board@(FastBoard pieces _) = concatMap generatePlaysFor friend
 		generatePlaysFor (posFrom, (_ ST.:!: pieceType)) =
 			concatMap playsAt $ FastBoard.destinations board side posFrom
 			where
-				playsAt posTo
+				playsAt !posTo
 					|promotable posFrom posTo pieceType = [Move posFrom posTo pieceType, Move posFrom posTo $ promote pieceType]
 					|otherwise = [Move posFrom posTo pieceType]
 
@@ -138,7 +114,7 @@ destinations (FastBoard pieces _) !side !posFrom = concatMap filterRun runs
 		filterRun [] = []
 
 		_ ST.:!: piece = pieces M.! posFrom
-		
+
 
 potentialDestionationsInfiniteTable :: Array (PlayerSide, Piece, ValidPosition) [[ValidPosition]]
 potentialDestionationsInfiniteTable =
