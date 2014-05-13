@@ -46,7 +46,7 @@ updateBoard (Put side posTo pieceTypeTo) (FastBoard pieces captures)
 
 
 isCheck :: PlayerSide -> FastBoard -> Bool
-isCheck side state@(FastBoard pieces _) = any takesKing $ enemyMoves
+isCheck !side state@(FastBoard pieces _) = any takesKing $ enemyMoves
 	where
 		-- Putting plays cannot capture king, moving plays is enough.
 		enemyMoves = FastBoard.movingPlays (flipSide side) state
@@ -87,11 +87,13 @@ movingPlays !side board@(FastBoard pieces _) = concatMap generatePlaysFor friend
 			concatMap playsAt $ FastBoard.destinations board side posFrom
 			where
 				playsAt !posTo
-					|promotable posFrom posTo pieceType = [Move posFrom posTo pieceType, Move posFrom posTo $ promote pieceType]
+					|isPiecePromotable && isPositionPromotable posFrom posTo =
+						[Move posFrom posTo pieceType, Move posFrom posTo promotedType]
 					|otherwise = [Move posFrom posTo pieceType]
+				isPiecePromotable = isPromotable pieceType
+				promotedType = promote pieceType
 
-		promotable posFrom posTo pieceType =
-			isPromotable pieceType &&
+		isPositionPromotable posFrom posTo =
 			(inEnemyTerritory side posFrom || inEnemyTerritory side posTo)
 
 		friendPieces = filter ((==side) . ST.fst . snd) $ M.assocs pieces
