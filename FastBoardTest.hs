@@ -46,7 +46,7 @@ boardWithKings = do
 	BoardState (M.fromList piecesWithKings) <$>
 		(SengoPair <$> listOf nonPromotedNormal <*> listOf nonPromotedNormal)
 
-prop_losslessCellCompression cell = (decompressCell . compressCell) cell == cell
+-- prop_losslessCellCompression cell = (decompressCell . compressCell) cell == cell
 
 -- Actually, Base.BoardState contains more (but, useless) information, namely
 -- ordering of captured pieces.

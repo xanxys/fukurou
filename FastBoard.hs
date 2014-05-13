@@ -20,19 +20,6 @@ type CellState = Word8
 data FastBoard = FastBoard (M.Map ValidPosition (PlayerSide, Piece)) (SengoPair [Piece])
 	deriving(Eq, Ord, Show)
 
-existFlag :: Word8
-existFlag = 0x80
-
-sideFlag :: Word8
-sideFlag = 0x40
-
-promoteFlag :: Word8
-promoteFlag = 0x20
-
-typeMask :: Word8
-typeMask = 0x07
-
-
 compressBoard :: BoardState -> FastBoard
 compressBoard (BoardState pieces pair) = FastBoard pieces pair
 
@@ -76,27 +63,6 @@ updateBoard (Put side posTo pieceTypeTo) (FastBoard pieces captures)
 		pieces' = M.insert posTo (side, pieceTypeTo) pieces
 		captures' = partiallyModifyPair side (subtractCapture pieceTypeTo) captures
 
--- TODO: consider draw case.
--- TODO: implement check-mate
-winningSide :: Game -> Maybe PlayerSide
-winningSide game
-	|not (null $ plays game) && head (plays game) == Resign = Just $ getTurn game
-	|otherwise = Nothing
-
-initialFastBoard :: FastBoard
-initialFastBoard = FastBoard (M.fromList pairs) (SengoPair [] [])
-	where
-		pairs = gotePairs ++ sentePairs
-		gotePairs =
-			[(makePosition (j, 1), (Gote, piece)) | (j, piece) <- zip [1..9] nonFuRow] ++
-			[(makePosition (8, 2), (Gote, HI)), (makePosition (2, 2), (Gote, KA))] ++
-			[(makePosition (j, 3), (Gote, FU)) | j <- [1..9]]
-		sentePairs =
-			[(makePosition (j, 7), (Sente, FU)) | j <- [1..9]] ++
-			[(makePosition (8, 8), (Sente, KA)), (makePosition (2, 8), (Sente, HI))] ++
-			[(makePosition (j, 9), (Sente, piece)) | (j, piece) <- zip [1..9] nonFuRow]
-
-		nonFuRow = [KY, KE, GI, KI, OU, KI, GI, KE, KY]
 
 isCheck :: PlayerSide -> FastBoard -> Bool
 isCheck side state@(FastBoard pieces _) = any takesKing $ enemyMoves
@@ -108,13 +74,15 @@ isCheck side state@(FastBoard pieces _) = any takesKing $ enemyMoves
 		[(kingPos, _)] = filter ((== (side, OU)) . snd) $ M.assocs pieces
 
 legalMovesConsideringCheck :: PlayerSide -> FastBoard -> [Play]
-legalMovesConsideringCheck side board = filter (not . leadsToCheck) $ FastBoard.legalMoves side board
+legalMovesConsideringCheck !side !board
+	|FastBoard.isCheck side board = filter (not . leadsToCheck) $
+		FastBoard.movingPlays side board ++ FastBoard.puttingMoves side board
+	|otherwise = 
+		filter (not . leadsToCheck) (FastBoard.movingPlays side board) ++
+		FastBoard.puttingMoves side board
 	where
 		leadsToCheck play = FastBoard.isCheck side (FastBoard.updateBoard play board)
 
--- | Legal moves: movings or puttings of pieces, excluding Resign.
-legalMoves :: PlayerSide -> FastBoard -> [Play]
-legalMoves side board = FastBoard.movingPlays side board ++ FastBoard.puttingMoves side board
 
 puttingMoves :: PlayerSide -> FastBoard -> [Play]
 puttingMoves side (FastBoard pieces captures) =
@@ -142,11 +110,13 @@ movingPlays side board@(FastBoard pieces _) = concatMap generatePlaysFor friendP
 					|otherwise = [Move posFrom posTo pieceType]
 
 		promotable posFrom posTo pieceType =
-			(promote pieceType /= pieceType) &&
+			isPromotable pieceType &&
 			(inEnemyTerritory side posFrom || inEnemyTerritory side posTo)
 
 		friendPieces = filter ((==side) . fst . snd) $ M.assocs pieces
 
+isPromotable :: Piece -> Bool
+isPromotable !p = (p <= HI) && (p /= KI)
 
 -- | Movable positions considering other pieces but without mates.
 destinations :: FastBoard -> PlayerSide -> ValidPosition -> [ValidPosition]
