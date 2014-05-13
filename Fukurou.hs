@@ -24,14 +24,14 @@ import FastBoard
 data Fukurou = Fukurou (MVar StdGen) PlayerSide (MVar Game)
 
 evaluateForSente :: FastBoard -> Float
-evaluateForSente state@(FastBoard pieces cpSente cpGote) =
+evaluateForSente state@(FastBoard pieces (SengoPair cpSente cpGote)) =
 	sum (map valueOfPiece $ map snd piecesSente) + evaluateCaptures cpSente +
 	negate ((sum $ map valueOfPiece $ map snd piecesGote) + evaluateCaptures cpGote)
 	where
-		(piecesSente, piecesGote) = partition ((== Sente) . fst) $
-			mapMaybe decompressCell $ elems pieces
+		(piecesSente, piecesGote) = partition ((== Sente) . fst) $ M.elems pieces
 
-		evaluateCaptures caps = fromIntegral $  sum [valueOfPiece pieceType * num | (pieceType, num) <- assocs caps]
+--		evaluateCaptures caps = fromIntegral $  sum [valueOfPiece pieceType * num | (pieceType, num) <- assocs caps]
+		evaluateCaptures caps = fromIntegral $ sum $ map valueOfPiece caps
 		
 		valueOfPiece FU = 1
 		valueOfPiece KY = 3
