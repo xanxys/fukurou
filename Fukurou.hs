@@ -25,11 +25,9 @@ data Fukurou = Fukurou (MVar StdGen) PlayerSide (MVar Game)
 
 evaluateForSente :: FastBoard -> Float
 evaluateForSente state@(FastBoard pieces cpSente cpGote) =
-	(if null plays then -1000 else 0) +
 	sum (map valueOfPiece $ map snd piecesSente) + evaluateCaptures cpSente +
 	negate ((sum $ map valueOfPiece $ map snd piecesGote) + evaluateCaptures cpGote)
 	where
-		plays = FastBoard.legalMovesConsideringCheck Sente state
 		(piecesSente, piecesGote) = partition ((== Sente) . fst) $
 			mapMaybe decompressCell $ elems pieces
 
@@ -48,7 +46,7 @@ evaluateForSente state@(FastBoard pieces cpSente cpGote) =
 		valueOfPiece NG = 6
 		valueOfPiece UM = 10
 		valueOfPiece RY = 12
-		valueOfPiece OU = 0
+		valueOfPiece OU = 1000
 
 evaluateFor :: PlayerSide -> FastBoard -> Float
 evaluateFor Sente state = evaluateForSente state
