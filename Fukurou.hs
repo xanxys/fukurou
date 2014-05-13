@@ -14,6 +14,7 @@ import Data.List
 import qualified Data.Map as M
 import Data.Maybe
 import Data.Ord
+import qualified Data.Strict.Tuple as ST
 import Data.Word
 import System.Random
 import Text.Printf
@@ -25,10 +26,10 @@ data Fukurou = Fukurou (MVar StdGen) PlayerSide (MVar Game)
 
 evaluateForSente :: FastBoard -> Float
 evaluateForSente state@(FastBoard pieces (SengoPair cpSente cpGote)) =
-	sum (map valueOfPiece $ map snd piecesSente) + evaluateCaptures cpSente +
-	negate ((sum $ map valueOfPiece $ map snd piecesGote) + evaluateCaptures cpGote)
+	(sum (map valueOfPiece $ map ST.snd piecesSente) + evaluateCaptures cpSente) -
+	(sum (map valueOfPiece $ map ST.snd piecesGote) + evaluateCaptures cpGote)
 	where
-		(piecesSente, piecesGote) = partition ((== Sente) . fst) $ M.elems pieces
+		(piecesSente, piecesGote) = partition ((== Sente) . ST.fst) $ M.elems pieces
 
 --		evaluateCaptures caps = fromIntegral $  sum [valueOfPiece pieceType * num | (pieceType, num) <- assocs caps]
 		evaluateCaptures caps = fromIntegral $ sum $ map valueOfPiece caps

@@ -3,6 +3,7 @@
 -- You can use this for UI, or automated testing of sophisticated board
 -- representation.
 module Base where
+import Data.Array (Ix)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Functor
@@ -13,9 +14,9 @@ data Piece
 	= FU | KY | KE | GI | KI | KA | HI
 	| TO | NY | NK | NG      | UM | RY
 	| OU
-	deriving(Show, Read, Eq, Ord)
+	deriving(Show, Read, Eq, Ord, Enum, Ix)
 
-data ValidPosition = ValidPosition !Int !Int deriving(Show, Eq, Ord)
+data ValidPosition = ValidPosition !Int !Int deriving(Show, Eq, Ord, Ix)
 
 makePosition :: (Int, Int) -> ValidPosition
 makePosition (x, y)
@@ -42,7 +43,7 @@ unpromote UM = KA
 unpromote RY = HI
 unpromote p = p
 
-data PlayerSide = Sente | Gote deriving(Show, Eq, Ord)
+data PlayerSide = Sente | Gote deriving(Show, Eq, Ord, Enum, Ix)
 
 -- | A sente-gote pair of any symmetrical information.
 -- instead of using tuples, use Sengo to avoid stupid mistakes.
