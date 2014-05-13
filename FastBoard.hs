@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, TupleSections #-}
 module FastBoard where
 import Control.Arrow
 import Control.Monad
@@ -10,6 +10,7 @@ import qualified Data.Set as S
 import Data.Maybe
 import Data.Ord
 import Data.Word
+import Debug.Trace
 
 import Base
 
@@ -17,7 +18,7 @@ type CellState = Word8
 
 -- | Equivalent to BoardState, but move generation is faster.
 data FastBoard = FastBoard !(UArray ValidPosition Word8) !(Array Piece Int) !(Array Piece Int)
-	deriving(Eq, Ord)
+	deriving(Eq, Ord, Show)
 
 existFlag :: Word8
 existFlag = 0x80
@@ -73,17 +74,29 @@ compressBoard (BoardState pieces (SengoPair senteCP goteCP)) = FastBoard
 		pieceTypeRange = (FU, HI)
 
 decompressBoard :: FastBoard -> BoardState
-decompressBoard _ = undefined
+decompressBoard (FastBoard bitboard senteCaps goteCaps) =
+	BoardState pieces (SengoPair (capsToList senteCaps) (capsToList goteCaps))
+	where
+		pieces = M.fromList $ mapMaybe (\(pos, cell) -> liftM (pos,) $ decompressCell cell) $ assocs bitboard
+		capsToList caps = concatMap (\(pieceType, num) -> replicate num pieceType) $ assocs caps
 
 instance Ix Piece where
-	range (FU, HI) = [FU,  KY, KE, GI, KI, KA, HI]
+	range (FU, HI) = [FU, KY, KE, GI, KI, KA, HI]
 	inRange (a, b) x = a <= x && x <= b
+	index (FU, _) FU = 0
+	index (FU, _) KY = 1
+	index (FU, _) KE = 2
+	index (FU, _) GI = 3
+	index (FU, _) KI = 4
+	index (FU, _) KA = 5
+	index (FU, _) HI = 6
 
 instance Ix ValidPosition where
 	range (ValidPosition x0 y0, ValidPosition x1 y1) = [ValidPosition x y | x <- [x0..x1], y <- [y0..y1]]
+	index (ValidPosition x0 y0, ValidPosition x1 y1) (ValidPosition x y) = (x - x0) * (y1 - y0 + 1) + (y - y0)
 	inRange (ValidPosition x0 y0, ValidPosition x1 y1) (ValidPosition x y) =
-		(x0 <= x && x <= x1) &&
-		(y0 <= y && y <= y1)
+		(x0 <= x && x <= x1) && (y0 <= y && y <= y1)
+
 
 -- | Apply a known-to-be-legal move to given `BoardState`.
 updateBoard :: Play -> FastBoard -> FastBoard
@@ -143,7 +156,8 @@ puttingPlays side (FastBoard pieces senteCaps goteCaps) =
 			|side == Gote = map fst $ filter ((> 0) . snd) $ assocs goteCaps
 
 movingPlays :: PlayerSide -> FastBoard -> [Play]
-movingPlays side board@(FastBoard bitboard senteCaps goteCaps) = concatMap generatePlaysFor friendPieces
+movingPlays side board@(FastBoard bitboard senteCaps goteCaps) = 
+	concatMap generatePlaysFor friendPieces
 	where
 		generatePlaysFor (posFrom, (_, pieceType)) =
 			concatMap playsAt $ FastBoard.destinations board side posFrom
@@ -157,7 +171,7 @@ movingPlays side board@(FastBoard bitboard senteCaps goteCaps) = concatMap gener
 			(inEnemyTerritory side posFrom || inEnemyTerritory side posTo)
 
 		friendPieces = filter ((==side) . fst . snd) pieces
-		pieces = map (id *** fromJust) $ filter (isJust . snd) $ map (id *** decompressCell) $ assocs bitboard
+		pieces = mapMaybe (\(pos, cell) -> liftM (pos,) $ decompressCell cell) $ assocs bitboard
 
 
 -- | Movable positions considering other pieces but without mates.

@@ -12,6 +12,7 @@ import Data.Array.Unboxed
 import Data.Bits
 import Data.List
 import qualified Data.Map as M
+import Data.Maybe
 import Data.Ord
 import Data.Word
 import System.Random
@@ -22,14 +23,17 @@ import FastBoard
 
 data Fukurou = Fukurou (MVar StdGen) PlayerSide (MVar Game)
 
-evaluateForSente :: BoardState -> Float
-evaluateForSente state@(BoardState pieces (SengoPair cpSente cpGote)) =
+evaluateForSente :: FastBoard -> Float
+evaluateForSente state@(FastBoard pieces cpSente cpGote) =
 	(if null plays then -1000 else 0) +
-	sum (map valueOfPiece $ map snd piecesSente ++ cpSente) +
-	negate (sum $ map valueOfPiece $ map snd piecesGote ++ cpGote)
+	sum (map valueOfPiece $ map snd piecesSente) + evaluateCaptures cpSente +
+	negate ((sum $ map valueOfPiece $ map snd piecesGote) + evaluateCaptures cpGote)
 	where
-		plays = Base.legalMovesConsideringCheck Sente state
-		(piecesSente, piecesGote) = partition ((== Sente) . fst) $ M.elems pieces
+		plays = FastBoard.legalMovesConsideringCheck Sente state
+		(piecesSente, piecesGote) = partition ((== Sente) . fst) $
+			mapMaybe decompressCell $ elems pieces
+
+		evaluateCaptures caps = fromIntegral $  sum [valueOfPiece pieceType * num | (pieceType, num) <- assocs caps]
 		
 		valueOfPiece FU = 1
 		valueOfPiece KY = 3
@@ -46,7 +50,7 @@ evaluateForSente state@(BoardState pieces (SengoPair cpSente cpGote)) =
 		valueOfPiece RY = 12
 		valueOfPiece OU = 0
 
-evaluateFor :: PlayerSide -> BoardState -> Float
+evaluateFor :: PlayerSide -> FastBoard -> Float
 evaluateFor Sente state = evaluateForSente state
 evaluateFor Gote state = negate $ evaluateForSente state
 
@@ -73,28 +77,30 @@ askPlay (Fukurou mRandomGen side mGame) = do
 	game <- readMVar mGame
 	case Base.legalMovesConsideringCheck side $ latestBoard game of
 		[] -> return Resign
-		plays -> do
+		_ -> do
 			let ((score, play), state) = runState
-				(searchBestPlay (-10000) 10000 4 side (latestBoard game))
+				(searchBestPlay (-10000) 10000 maxDepth side (compressBoard $ latestBoard game))
 				(SearchState {numberOfBoards = 0, scoreCache = M.empty})
 			printf "#eval: %d\n" (numberOfBoards state)
 			printf "#stored boards: %d\n" (M.size $ scoreCache state)
 			putStrLn $ "Score: " ++ show score
 			return play
+	where
+		maxDepth = 3
 
 data SearchState = SearchState {
 		numberOfBoards :: !Int,
-		scoreCache :: !(M.Map (PlayerSide, BoardState) (Float, Play))
+		scoreCache :: !(M.Map (PlayerSide, FastBoard) (Float, Play))
 	}
 
 
-evaluateBoard :: PlayerSide -> BoardState -> State SearchState Float
+evaluateBoard :: PlayerSide -> FastBoard -> State SearchState Float
 evaluateBoard side board = do
 	modify $! \state -> state {numberOfBoards = numberOfBoards state + 1}
 	return $! evaluateFor side board
 
 -- | Select optimal play for current side. Returns the play and score.
-searchBestPlay :: Float -> Float -> Int -> PlayerSide -> BoardState -> State SearchState (Float, Play)
+searchBestPlay :: Float -> Float -> Int -> PlayerSide -> FastBoard -> State SearchState (Float, Play)
 searchBestPlay !alpha !beta !depth !side !board
 	|depth == 0 = do
 		score <- evaluateBoard side board
@@ -116,10 +122,10 @@ searchBestPlay !alpha !beta !depth !side !board
 		findBestPlay !currentBestScore !currentBestPlay (play:plays)
 			|currentBestScore > beta = return (currentBestScore, currentBestPlay)
 			|otherwise = do
-				(scoreEnemy, _) <- searchBestPlay (-beta) (-currentBestScore) (depth - 1) (flipSide side) (Base.updateBoard play board)
+				(scoreEnemy, _) <- searchBestPlay (-beta) (-currentBestScore) (depth - 1) (flipSide side) (FastBoard.updateBoard play board)
 				let score = (-scoreEnemy)
 				if score > currentBestScore
 					then findBestPlay score play plays
 					else findBestPlay currentBestScore currentBestPlay plays
 
-		plays = Base.legalMovesConsideringCheck side board
+		plays = FastBoard.legalMovesConsideringCheck side board

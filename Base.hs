@@ -77,7 +77,7 @@ data Play
 	= Move !ValidPosition !ValidPosition !Piece
 	| Put !PlayerSide !ValidPosition !Piece
 	| Resign
-	deriving(Eq, Ord)
+	deriving(Eq, Ord, Show)
 
 -- | Record of a valid shogi game up to a certain point.
 data Game = Game {
