@@ -24,7 +24,7 @@ import FastBoard
 
 data Fukurou = Fukurou Weight (MVar StdGen) PlayerSide (MVar Game)
 
-data Weight = Weight (Array Piece Int)
+data Weight = Weight (Array Piece Float)
 
 defaultWeight :: Weight
 defaultWeight = Weight pieceWeight
@@ -47,14 +47,11 @@ defaultWeight = Weight pieceWeight
 
 evaluateForSente :: Weight -> FastBoard -> Float
 evaluateForSente (Weight pieceWeight) state@(FastBoard pieces (SengoPair cpSente cpGote)) =
-	(fromIntegral $ sum (map valueOfPiece $ map ST.snd piecesSente) + evaluateCaptures cpSente) -
-	(fromIntegral $ sum (map valueOfPiece $ map ST.snd piecesGote) + evaluateCaptures cpGote)
+	(sum (map valueOfPiece $ map ST.snd piecesSente) + evaluateCaptures cpSente) -
+	(sum (map valueOfPiece $ map ST.snd piecesGote) + evaluateCaptures cpGote)
 	where
 		(piecesSente, piecesGote) = partition ((== Sente) . ST.fst) $ M.elems pieces
-
---		evaluateCaptures caps = fromIntegral $  sum [valueOfPiece pieceType * num | (pieceType, num) <- assocs caps]
-		evaluateCaptures caps = fromIntegral $ sum $ map valueOfPiece caps
-		
+		evaluateCaptures caps = sum $ map valueOfPiece caps
 		valueOfPiece p = pieceWeight ! p
 
 evaluateFor :: Weight -> PlayerSide -> FastBoard -> Float
