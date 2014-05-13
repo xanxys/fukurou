@@ -29,6 +29,9 @@ sideFlag = 0x40
 promoteFlag :: Word8
 promoteFlag = 0x20
 
+typeMask :: Word8
+typeMask = 0x07
+
 compressCell :: Maybe (PlayerSide, Piece) -> CellState
 compressCell Nothing = 0
 compressCell (Just (side, piece)) =
@@ -46,13 +49,24 @@ compressCell (Just (side, piece)) =
 		typeFlag HI = 6
 		typeFlag OU = 7
 
+isOccupied :: CellState -> Bool
+isOccupied !cs = cs .&. existFlag /= 0
+
+isSide :: PlayerSide -> CellState -> Bool
+isSide Sente !cs = cs .&. sideFlag /= 0
+isSide Gote !cs = cs .&. sideFlag == 0
+
+isPromotable :: CellState -> Bool
+isPromotable cs = ty /= 4 && ty /= 7 && (cs .&. promoteFlag == 0)
+	where ty = cs .&. typeMask
+
 decompressCell :: CellState -> Maybe (PlayerSide, Piece)
 decompressCell cs
 	|cs .&. existFlag == 0 = Nothing
 	|otherwise = Just (side, pieceType)
 	where
 		side = if cs .&. sideFlag /= 0 then Sente else Gote
-		pieceType = (if promoted then promote else id) (baseType $ cs .&. 0x07)
+		pieceType = (if promoted then promote else id) (baseType $ cs .&. typeMask)
 		promoted = cs .&. promoteFlag /= 0
 		baseType 0 = FU
 		baseType 1 = KY
@@ -127,10 +141,18 @@ isCheck !side state@(FastBoard pieces senteCaps goteCaps) = any takesKing $ enem
 		enemyMoves = FastBoard.movingPlays (flipSide side) state
 		takesKing (Move _ dst _) = dst == kingPos
 		takesKing (Put _ _ _) = False
-		[(kingPos, _)] = filter ((== compressCell (Just (side, OU))) . snd) $ assocs pieces
+		((kingPos, _):_) = filter ((== compressCell (Just (side, OU))) . snd) $ assocs pieces
 
+-- Putting some piece cannot make thing worse regarding checks.
+-- (Put can make check->non-check, but not non-check->check)
 legalMovesConsideringCheck :: PlayerSide -> FastBoard -> [Play]
-legalMovesConsideringCheck side board = filter (not . leadsToCheck) $ FastBoard.legalMoves side board
+legalMovesConsideringCheck side board
+	|FastBoard.isCheck side board =
+		filter (not . leadsToCheck) $
+			FastBoard.movingPlays side board ++ FastBoard.puttingPlays side board
+	|otherwise =
+		filter (not . leadsToCheck) (FastBoard.movingPlays side board) ++
+		FastBoard.puttingPlays side board
 	where
 		leadsToCheck play = FastBoard.isCheck side (FastBoard.updateBoard play board)
 
@@ -148,7 +170,7 @@ puttingPlays side (FastBoard pieces senteCaps goteCaps) =
 			[ValidPosition x ySearch | ySearch <- [1..9]]
 		doubleFu _ = False
 
-		puttablePositions = filter ((== compressCell Nothing) . (pieces !)) $ allPositions
+		puttablePositions = filter (not . isOccupied . (pieces !)) $ allPositions
 		allPositions = [(ValidPosition x y) | x <- [1..9], y <- [1..9]]
 
 		puttableTypes
@@ -159,19 +181,19 @@ movingPlays :: PlayerSide -> FastBoard -> [Play]
 movingPlays side board@(FastBoard bitboard senteCaps goteCaps) = 
 	concatMap generatePlaysFor friendPieces
 	where
-		generatePlaysFor (posFrom, (_, pieceType)) =
+		generatePlaysFor (posFrom, piece) =
 			concatMap playsAt $ FastBoard.destinations board side posFrom
 			where
 				playsAt posTo
-					|promotable posFrom posTo pieceType = [Move posFrom posTo pieceType, Move posFrom posTo $ promote pieceType]
+					|promotable posFrom posTo piece = [Move posFrom posTo pieceType, Move posFrom posTo $ promote pieceType]
 					|otherwise = [Move posFrom posTo pieceType]
+				Just (_, pieceType) = decompressCell piece
 
-		promotable posFrom posTo pieceType =
-			(promote pieceType /= pieceType) &&
+		promotable !posFrom !posTo !piece =
+			(isPromotable piece) &&
 			(inEnemyTerritory side posFrom || inEnemyTerritory side posTo)
 
-		friendPieces = filter ((==side) . fst . snd) pieces
-		pieces = mapMaybe (\(pos, cell) -> liftM (pos,) $ decompressCell cell) $ assocs bitboard
+		friendPieces = filter (\(pos, cell) -> isOccupied cell && isSide side cell) $ assocs bitboard
 
 
 -- | Movable positions considering other pieces but without mates.
@@ -182,13 +204,12 @@ destinations (FastBoard pieces _ _) side posFrom = concatMap filterRun runs
 
 		filterRun (p:ps)
 			|not (inBoard p) = []
-			|otherwise = case decompressCell (pieces ! validP) of
-				Nothing -> validP : filterRun ps
-				Just (blockerSide, blockerPos) ->
-					if blockerSide == side
-						then []  -- cannot move into friend's place
-						else [validP]  -- can take enemy piece, but cannot move past it
-			where validP = makePosition p
+			|not (isOccupied currentCell) = validP : filterRun ps
+			|isSide side currentCell = []  -- cannot move into friend's place
+			|otherwise = [validP]  -- can take enemy piece, but cannot move past it
+			where
+				currentCell = pieces ! validP
+				validP = makePosition p
 		filterRun [] = []
 
 		Just (_, piece) = decompressCell $ pieces ! posFrom
