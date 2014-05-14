@@ -45,14 +45,20 @@ defaultWeight = Weight pieceWeight
 			(RY, 12),
 			(OU, 1000)]
 
+-- | Strict sum.
+sum' :: Num a => [a] -> a
+sum' = foldl' (+) 0
+
 evaluateForSente :: Weight -> FastBoard -> Float
 evaluateForSente (Weight pieceWeight) state@(FastBoard pieces (SengoPair cpSente cpGote)) =
-	(sum (map valueOfPiece $ map ST.snd piecesSente) + evaluateCaptures cpSente) -
-	(sum (map valueOfPiece $ map ST.snd piecesGote) + evaluateCaptures cpGote)
+	(sum' $ map valueOfSidedPiece $ M.elems pieces) +
+	(evaluateCaptures cpSente - evaluateCaptures cpGote)
 	where
-		(piecesSente, piecesGote) = partition ((== Sente) . ST.fst) $ M.elems pieces
-		evaluateCaptures caps = sum $ map valueOfPiece caps
-		valueOfPiece p = pieceWeight ! p
+		valueOfSidedPiece (Sente ST.:!: p) = valueOfPiece p
+		valueOfSidedPiece (Gote ST.:!: p) = - valueOfPiece p
+
+		valueOfPiece !p = pieceWeight ! p
+		evaluateCaptures !caps = sum' $ map valueOfPiece caps
 
 evaluateFor :: Weight -> PlayerSide -> FastBoard -> Float
 evaluateFor w Sente state = evaluateForSente w state
