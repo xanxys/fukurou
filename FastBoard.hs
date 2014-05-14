@@ -59,10 +59,20 @@ legalMovesConsideringCheck !side !board
 	|FastBoard.isCheck side board = filter (not . leadsToCheck) $
 		FastBoard.movingPlays side board ++ FastBoard.puttingMoves side board
 	|otherwise = 
-		filter (not . leadsToCheck) (FastBoard.movingPlays side board) ++
+		-- Assumption.
+		-- forall piece. piece != OU && piece cannot be taken by enemy
+		-- -> moving it will not immediately cause check.
+		-- (Further optimization can be done by splitting short run and long run)		
+		filter (not . movingLeadsToCheck) (FastBoard.movingPlays side board) ++
 		FastBoard.puttingMoves side board
 	where
-		leadsToCheck play = FastBoard.isCheck side (FastBoard.updateBoard play board)
+		movingLeadsToCheck play@(Move _ _ OU) = leadsToCheck play
+		movingLeadsToCheck play@(Move src _ _)
+			|src `S.member` checkedPositions = leadsToCheck play
+			|otherwise = False
+
+		checkedPositions = S.fromList [dst | Move _ dst _ <- FastBoard.movingPlays (flipSide side) board]
+		leadsToCheck !play = FastBoard.isCheck side (FastBoard.updateBoard play board)
 
 
 puttingMoves :: PlayerSide -> FastBoard -> [Play]
