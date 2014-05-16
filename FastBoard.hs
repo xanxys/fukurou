@@ -18,8 +18,8 @@ import System.Random
 import Base
 
 -- | Equivalent to BoardState, but move generation is faster.
--- TODO: sane captured pieces handling
-data FastBoard = FastBoard (M.Map ValidPosition (ST.Pair PlayerSide Piece)) (SengoPair [Piece])
+-- don't include captured piece type with number=0
+data FastBoard = FastBoard (M.Map ValidPosition (ST.Pair PlayerSide Piece)) (SengoPair (M.Map Piece Int))
 	deriving(Eq, Ord, Show)
 
 
@@ -42,9 +42,8 @@ instance Data.Hashable.Hashable FastBoard where
 		salt `xor` pieceHash `xor` captureHash Sente senteCaps `xor` captureHash Gote goteCaps
 		where
 			pieceHash = xorSum' [hashPieceBase ! (pos, side, piece) | (pos, (side ST.:!: piece)) <- M.assocs pieces]
-			captureHash !side !caps = xorSum' [hashCaptureBase ! (side, piece, num) | (piece, num) <- countGroups caps]
-			countGroups !xs =
-				map (\group -> (head group, length group)) $! group xs
+			captureHash !side !caps = xorSum' [hashCaptureBase ! (side, piece, num) | (piece, num) <- M.assocs caps]
+
 
 
 
@@ -52,11 +51,17 @@ instance Data.Hashable.Hashable FastBoard where
 
 compressBoard :: BoardState -> FastBoard
 compressBoard (BoardState pieces pair) = FastBoard
-	(M.map (\(side, piece) -> side ST.:!: piece) pieces) pair
+	(M.map (\(side, piece) -> side ST.:!: piece) pieces) (fmap countGroups pair)
+	where
+		countGroups !xs =
+			M.fromList $! map (\group -> (head group, length group)) $! group xs
 
 decompressBoard :: FastBoard -> BoardState
 decompressBoard (FastBoard pieces pair) = BoardState
-	(M.map (\(side ST.:!: piece) -> (side, piece)) pieces) pair
+	(M.map (\(side ST.:!: piece) -> (side, piece)) pieces) (fmap expandGroups pair)
+	where
+		expandGroups !m =
+			concatMap (\(p, n) -> replicate n p) $ M.assocs m
 
 -- | Apply a known-to-be-legal move to given `FastBoard`.
 updateBoard :: Play -> FastBoard -> FastBoard
@@ -66,14 +71,16 @@ updateBoard (Move posFrom posTo pieceTypeTo) (FastBoard pieces captures)
 		Just (_ ST.:!: pieceTypeToBeCaptured) -> FastBoard pieces' (captures' $ unpromote pieceTypeToBeCaptured)
 	where
 		pieces' = M.insert posTo (side ST.:!: pieceTypeTo) $ M.delete posFrom pieces
-		captures' newPieceType = partiallyModifyPair side (newPieceType:) captures
+		captures' newPieceType = partiallyModifyPair side (addCapture newPieceType) captures
+		addCapture !pieceType !caps = M.insertWith (+) pieceType 1 caps
 
 		side ST.:!: pieceTypeFrom = pieces M.! posFrom
 updateBoard (Put side posTo pieceTypeTo) (FastBoard pieces captures)
 	= FastBoard pieces' captures'
 	where
 		pieces' = M.insert posTo (side ST.:!: pieceTypeTo) pieces
-		captures' = partiallyModifyPair side (subtractCapture pieceTypeTo) captures
+		captures' = partiallyModifyPair side (removeCapture pieceTypeTo) captures
+		removeCapture !pieceType !caps = M.update (\num -> if num > 1 then Just (num - 1) else Nothing) pieceType caps
 
 
 isCheck :: PlayerSide -> FastBoard -> Bool
@@ -122,7 +129,7 @@ puttingMoves !side (FastBoard pieces captures) =
 		puttablePositions = allPositions `S.difference` (M.keysSet pieces)
 		allPositions = S.fromList [(ValidPosition x y) | x <- [1..9], y <- [1..9]]
 
-		puttableTypes = map head $ group $ sort $ lookupPair captures side
+		puttableTypes = M.keys $ lookupPair captures side
 
 movingPlays :: PlayerSide -> FastBoard -> [Play]
 movingPlays !side board@(FastBoard pieces _) = concatMap generatePlaysFor friendPieces

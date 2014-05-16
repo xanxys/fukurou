@@ -62,7 +62,7 @@ evaluateForSente (Weight pieceWeight) state@(FastBoard pieces (SengoPair cpSente
 		valueOfSidedPiece (Gote ST.:!: p) = - valueOfPiece p
 
 		valueOfPiece !p = pieceWeight ! p
-		evaluateCaptures !caps = sum' $ map valueOfPiece caps
+		evaluateCaptures !caps = sum' $ map (\(t, n) -> fromIntegral n * valueOfPiece t) $ M.assocs caps
 
 evaluateFor :: Weight -> PlayerSide -> FastBoard -> Float
 evaluateFor w Sente state = evaluateForSente w state
