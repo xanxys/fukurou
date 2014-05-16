@@ -147,7 +147,7 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 	where
 		findBestPlay !currentBestScore !currentBestPlay [] = return (currentBestScore, currentBestPlay)
 		findBestPlay !currentBestScore !currentBestPlay (play:plays)
-			|currentBestScore > beta = return (currentBestScore, currentBestPlay)
+			|currentBestScore >= beta = return (currentBestScore, currentBestPlay)
 			|otherwise = do
 				(scoreEnemy, _) <- searchBestPlay state weight (-beta) (-currentBestScore) (depth - 1) (flipSide side) (FastBoard.updateBoard play board)
 				let score = (-scoreEnemy)
