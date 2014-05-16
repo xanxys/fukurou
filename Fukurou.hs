@@ -126,7 +126,7 @@ searchBestPlay !weight !alpha !beta !depth !side !board
 				modify $! \state -> state {scoreCache = M.insert (side, board) entry $ scoreCache state}
 				return entry
 			Just entry -> do
-				return entry				
+				return entry	
 	where
 		findBestPlay !currentBestScore !currentBestPlay [] = return (currentBestScore, currentBestPlay)
 		findBestPlay !currentBestScore !currentBestPlay (play:plays)

@@ -54,16 +54,18 @@ isCheck !side state@(FastBoard pieces _) = any takesKing $ enemyMoves
 		takesKing (Put _ _ _) = False
 		[(kingPos, _)] = filter ((== (side ST.:!: OU)) . snd) $ M.assocs pieces
 
+-- | Generate all legal moves in (hopefully) best-first order.
+-- (this funcion is implicitly coupled with ev. fun.)
 legalMovesConsideringCheck :: PlayerSide -> FastBoard -> [Play]
 legalMovesConsideringCheck !side !board
 	|FastBoard.isCheck side board = filter (not . leadsToCheck) $
 		FastBoard.movingPlays side board ++ FastBoard.puttingMoves side board
-	|otherwise = 
+	|otherwise =
 		-- Assumption.
 		-- forall piece. piece != OU && piece cannot be taken by enemy
 		-- -> moving it will not immediately cause check.
-		-- (Further optimization can be done by splitting short run and long run)		
-		filter (not . movingLeadsToCheck) (FastBoard.movingPlays side board) ++
+		-- (Further optimization can be done by splitting short run and long run)
+		reorderMovingPlays board (filter (not . movingLeadsToCheck) (FastBoard.movingPlays side board)) ++
 		FastBoard.puttingMoves side board
 	where
 		movingLeadsToCheck play@(Move _ _ OU) = leadsToCheck play
@@ -77,7 +79,7 @@ legalMovesConsideringCheck !side !board
 
 puttingMoves :: PlayerSide -> FastBoard -> [Play]
 puttingMoves !side (FastBoard pieces captures) =
-	filter (not . doubleFu) $ 
+	filter (not . doubleFu) $
 		[Put side posTo pieceType | posTo <- S.toList puttablePositions, pieceType <- puttableTypes]
 	where
 		doubleFu (Put side (ValidPosition x y) FU) =
@@ -107,6 +109,14 @@ movingPlays !side board@(FastBoard pieces _) = concatMap generatePlaysFor friend
 			(inEnemyTerritory side posFrom || inEnemyTerritory side posTo)
 
 		friendPieces = filter ((==side) . ST.fst . snd) $ M.assocs pieces
+
+-- | A play to capture enemy's piece is mostly better than others.
+reorderMovingPlays :: FastBoard -> [Play] -> [Play]
+reorderMovingPlays (FastBoard pieces _) !plays =
+	reverse $! sortBy (comparing takesPiece) plays
+	where
+		takesPiece (Move _ dst _) = M.member dst pieces
+
 
 isPromotable :: Piece -> Bool
 isPromotable !p = (p <= HI) && (p /= KI)
