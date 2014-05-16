@@ -36,6 +36,7 @@ hashCaptureBase = listArray
 xorSum' :: Bits a => [a] -> a
 xorSum' = foldl' xor 0
 
+-- TODO: it's possible to make hash calculation incremental
 instance Data.Hashable.Hashable FastBoard where
 	hashWithSalt !salt (FastBoard pieces (SengoPair senteCaps goteCaps)) =
 		salt `xor` pieceHash `xor` captureHash Sente senteCaps `xor` captureHash Gote goteCaps

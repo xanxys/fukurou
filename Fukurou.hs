@@ -109,7 +109,6 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 
 data SearchState s = SearchState {
 		numberOfBoards :: STRef s Int,
-		-- scoreCache :: STRef s (M.Map (PlayerSide, FastBoard) (Float, Play))
 		scoreCache :: Data.HashTable.ST.Basic.HashTable s (PlayerSide, FastBoard) (Float, Play)
 	}
 
@@ -137,12 +136,10 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 		score <- evaluateBoard state weight side board
 		return $! score `seq` (score, Resign)
 	|otherwise = do
-		-- cache <- readSTRef $ scoreCache state
 		maybeEntry <- H.lookup (scoreCache state) (side, board)
 		case maybeEntry of
 			Nothing -> do
 				entry <- findBestPlay alpha (head plays) (tail plays)
-				-- modifySTRef' (scoreCache state) $! \cache -> M.insert (side, board) entry cache
 				H.insert (scoreCache state) (side, board) entry
 				return entry
 			Just entry -> do
