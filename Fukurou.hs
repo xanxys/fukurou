@@ -105,7 +105,7 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 			putStrLn $ "Score: " ++ show score
 			return play
 	where
-		maxDepth = 4
+		maxDepth = 5
 
 data SearchState s = SearchState {
 		numberOfBoards :: STRef s Int,
