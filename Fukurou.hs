@@ -7,13 +7,14 @@
 module Fukurou where
 import Control.Concurrent.MVar
 import Control.Monad
-import Control.Monad.State.Strict
+import Control.Monad.ST
 import Data.Array.Unboxed
 import Data.Bits
 import Data.List
 import qualified Data.Map as M
 import Data.Maybe
 import Data.Ord
+import Data.STRef
 import qualified Data.Strict.Tuple as ST
 import Data.Word
 import System.Random
@@ -88,42 +89,51 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 	case Base.legalMovesConsideringCheck side $ latestBoard game of
 		[] -> return Resign
 		_ -> do
-			let ((score, play), state) = runState
-				(searchBestPlay weight (-10000) 10000 maxDepth side (compressBoard $ latestBoard game))
-				(SearchState {numberOfBoards = 0, scoreCache = M.empty})
-			printf "#eval: %d\n" (numberOfBoards state)
-			printf "#stored boards: %d\n" (M.size $ scoreCache state)
+			let ((score, play), (number', cache')) = runST $ do
+				number <- newSTRef 0
+				cache <- newSTRef M.empty
+				let state = SearchState {numberOfBoards = number, scoreCache = cache}
+				result <- searchBestPlay state weight (-10000) 10000 maxDepth side $ compressBoard $ latestBoard game
+				number' <- readSTRef number
+				cache' <- readSTRef cache
+				return (result, (number', cache'))
+			printf "#eval: %d\n" number'
+			printf "#stored boards: %d\n" (M.size cache')
 			putStrLn $ "Score: " ++ show score
 			return play
 	where
 		maxDepth = 4
 
-data SearchState = SearchState {
-		numberOfBoards :: !Int,
-		scoreCache :: !(M.Map (PlayerSide, FastBoard) (Float, Play))
+data SearchState s = SearchState {
+		numberOfBoards :: STRef s Int,
+		scoreCache :: STRef s (M.Map (PlayerSide, FastBoard) (Float, Play))
 	}
 
+modifySTRef' ref f= do
+	x <- readSTRef ref
+	let x' = f x
+	x' `seq` writeSTRef ref x'
 
-evaluateBoard :: Weight -> PlayerSide -> FastBoard -> State SearchState Float
-evaluateBoard !weight !side !board = do
-	modify $! \state -> state {numberOfBoards = numberOfBoards state + 1}
+evaluateBoard :: SearchState s -> Weight -> PlayerSide -> FastBoard -> ST s Float
+evaluateBoard !state !weight !side !board = do
+	modifySTRef' (numberOfBoards state) (+1)
 	return $! evaluateFor weight side board
 
 -- | Select optimal play for current side. Returns the play and score.
-searchBestPlay :: Weight -> Float -> Float -> Int -> PlayerSide -> FastBoard -> State SearchState (Float, Play)
-searchBestPlay !weight !alpha !beta !depth !side !board
+searchBestPlay :: SearchState s -> Weight -> Float -> Float -> Int -> PlayerSide -> FastBoard -> ST s (Float, Play)
+searchBestPlay !state !weight !alpha !beta !depth !side !board
 	|depth == 0 = do
-		score <- evaluateBoard weight side board
+		score <- evaluateBoard state weight side board
 		return $! score `seq` (score, error "Terminal Node")
 	|null plays = do
-		score <- evaluateBoard weight side board
+		score <- evaluateBoard state weight side board
 		return $! score `seq` (score, Resign)
 	|otherwise = do
-		cache <- liftM scoreCache get
+		cache <- readSTRef $ scoreCache state
 		case M.lookup (side, board) cache of
 			Nothing -> do
 				entry <- findBestPlay alpha (head plays) (tail plays)
-				modify $! \state -> state {scoreCache = M.insert (side, board) entry $ scoreCache state}
+				modifySTRef' (scoreCache state) $! \cache -> M.insert (side, board) entry cache
 				return entry
 			Just entry -> do
 				return entry	
@@ -132,7 +142,7 @@ searchBestPlay !weight !alpha !beta !depth !side !board
 		findBestPlay !currentBestScore !currentBestPlay (play:plays)
 			|currentBestScore > beta = return (currentBestScore, currentBestPlay)
 			|otherwise = do
-				(scoreEnemy, _) <- searchBestPlay weight (-beta) (-currentBestScore) (depth - 1) (flipSide side) (FastBoard.updateBoard play board)
+				(scoreEnemy, _) <- searchBestPlay state weight (-beta) (-currentBestScore) (depth - 1) (flipSide side) (FastBoard.updateBoard play board)
 				let score = (-scoreEnemy)
 				if score > currentBestScore
 					then findBestPlay score play plays
