@@ -10,6 +10,9 @@ import Control.Monad
 import Control.Monad.ST
 import Data.Array.Unboxed
 import Data.Bits
+import qualified Data.HashTable.Class as H
+import qualified Data.HashTable.ST.Basic
+import qualified Data.Hashable
 import Data.List
 import qualified Data.Map as M
 import Data.Maybe
@@ -89,16 +92,16 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 	case Base.legalMovesConsideringCheck side $ latestBoard game of
 		[] -> return Resign
 		_ -> do
-			let ((score, play), (number', cache')) = runST $ do
+			let ((score, play), (number', cacheSize')) = runST $ do
 				number <- newSTRef 0
-				cache <- newSTRef M.empty
+				cache <- Data.HashTable.ST.Basic.new -- newSTRef M.empty
 				let state = SearchState {numberOfBoards = number, scoreCache = cache}
 				result <- searchBestPlay state weight (-10000) 10000 maxDepth side $ compressBoard $ latestBoard game
 				number' <- readSTRef number
-				cache' <- readSTRef cache
-				return (result, (number', cache'))
+				cacheSize' <- liftM length (H.toList cache)
+				return (result, (number', cacheSize'))
 			printf "#eval: %d\n" number'
-			printf "#stored boards: %d\n" (M.size cache')
+			printf "#stored boards: %d\n" cacheSize'
 			putStrLn $ "Score: " ++ show score
 			return play
 	where
@@ -106,8 +109,13 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 
 data SearchState s = SearchState {
 		numberOfBoards :: STRef s Int,
-		scoreCache :: STRef s (M.Map (PlayerSide, FastBoard) (Float, Play))
+		-- scoreCache :: STRef s (M.Map (PlayerSide, FastBoard) (Float, Play))
+		scoreCache :: Data.HashTable.ST.Basic.HashTable s (PlayerSide, FastBoard) (Float, Play)
 	}
+
+instance Data.Hashable.Hashable PlayerSide where
+	hashWithSalt salt Sente = salt
+	hashWithSalt salt Gote = complement salt
 
 modifySTRef' ref f= do
 	x <- readSTRef ref
@@ -129,14 +137,16 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 		score <- evaluateBoard state weight side board
 		return $! score `seq` (score, Resign)
 	|otherwise = do
-		cache <- readSTRef $ scoreCache state
-		case M.lookup (side, board) cache of
+		-- cache <- readSTRef $ scoreCache state
+		maybeEntry <- H.lookup (scoreCache state) (side, board)
+		case maybeEntry of
 			Nothing -> do
 				entry <- findBestPlay alpha (head plays) (tail plays)
-				modifySTRef' (scoreCache state) $! \cache -> M.insert (side, board) entry cache
+				-- modifySTRef' (scoreCache state) $! \cache -> M.insert (side, board) entry cache
+				H.insert (scoreCache state) (side, board) entry
 				return entry
 			Just entry -> do
-				return entry	
+				return entry
 	where
 		findBestPlay !currentBestScore !currentBestPlay [] = return (currentBestScore, currentBestPlay)
 		findBestPlay !currentBestScore !currentBestPlay (play:plays)

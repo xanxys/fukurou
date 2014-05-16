@@ -4,6 +4,7 @@ import Control.Arrow
 import Control.Monad
 import Data.Array
 import Data.Bits
+import qualified Data.Hashable
 import Data.List
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -12,12 +13,41 @@ import Data.Maybe
 import Data.Ord
 import Data.Word
 import Debug.Trace
+import System.Random
 
 import Base
 
 -- | Equivalent to BoardState, but move generation is faster.
+-- TODO: sane captured pieces handling
 data FastBoard = FastBoard (M.Map ValidPosition (ST.Pair PlayerSide Piece)) (SengoPair [Piece])
 	deriving(Eq, Ord, Show)
+
+
+hashPieceBase :: Array (ValidPosition, PlayerSide, Piece) Int
+hashPieceBase = listArray
+	((ValidPosition 1 1, Sente, FU), (ValidPosition 9 9, Gote, OU))
+	$ randoms $ mkStdGen 0
+
+hashCaptureBase :: Array (PlayerSide, Piece, Int) Int
+hashCaptureBase = listArray
+	((Sente, FU, 0), (Gote, OU, 18))
+	$ randoms $ mkStdGen 1
+
+xorSum' :: Bits a => [a] -> a
+xorSum' = foldl' xor 0
+
+instance Data.Hashable.Hashable FastBoard where
+	hashWithSalt !salt (FastBoard pieces (SengoPair senteCaps goteCaps)) =
+		salt `xor` pieceHash `xor` captureHash Sente senteCaps `xor` captureHash Gote goteCaps
+		where
+			pieceHash = xorSum' [hashPieceBase ! (pos, side, piece) | (pos, (side ST.:!: piece)) <- M.assocs pieces]
+			captureHash !side !caps = xorSum' [hashCaptureBase ! (side, piece, num) | (piece, num) <- countGroups caps]
+			countGroups !xs =
+				map (\group -> (head group, length group)) $! group xs
+
+
+
+
 
 compressBoard :: BoardState -> FastBoard
 compressBoard (BoardState pieces pair) = FastBoard
