@@ -59,14 +59,15 @@ isCheck !side state@(FastBoard pieces _) = any takesKing $ enemyMoves
 legalMovesConsideringCheck :: PlayerSide -> FastBoard -> [Play]
 legalMovesConsideringCheck !side !board
 	|FastBoard.isCheck side board = filter (not . leadsToCheck) $
-		FastBoard.movingPlays side board ++ FastBoard.puttingMoves side board
+		FastBoard.movingPlays side board ++
+		reorderPuttingPlays board (FastBoard.puttingMoves side board)
 	|otherwise =
 		-- Assumption.
 		-- forall piece. piece != OU && piece cannot be taken by enemy
 		-- -> moving it will not immediately cause check.
 		-- (Further optimization can be done by splitting short run and long run)
 		reorderMovingPlays board (filter (not . movingLeadsToCheck) (FastBoard.movingPlays side board)) ++
-		FastBoard.puttingMoves side board
+		reorderPuttingPlays board (FastBoard.puttingMoves side board)
 	where
 		movingLeadsToCheck play@(Move _ _ OU) = leadsToCheck play
 		movingLeadsToCheck play@(Move src _ _)
@@ -109,6 +110,22 @@ movingPlays !side board@(FastBoard pieces _) = concatMap generatePlaysFor friend
 			(inEnemyTerritory side posFrom || inEnemyTerritory side posTo)
 
 		friendPieces = filter ((==side) . ST.fst . snd) $ M.assocs pieces
+
+reorderPuttingPlays :: FastBoard -> [Play] -> [Play]
+reorderPuttingPlays board@(FastBoard pieces _) !plays =
+	reverse $! sortBy (comparing threatens) plays
+	where
+		threatens play@(Put side dst _) =
+			sum $ map posToThreat targets
+			where
+				board' = FastBoard.updateBoard play board
+				targets = FastBoard.destinations board' side dst
+
+				posToThreat !pos = case M.lookup pos pieces of
+					Nothing -> 0
+					Just (targetSide ST.:!: _) ->
+						if targetSide == side then 0 else 1
+
 
 -- | A play to capture enemy's piece is mostly better than others.
 reorderMovingPlays :: FastBoard -> [Play] -> [Play]
