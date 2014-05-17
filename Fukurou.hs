@@ -123,6 +123,7 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 			printf "* #eval: %d\n" number'
 			printf "* #stored boards: %d\n" cacheSize'
 			printf "* best play: %s\n" (show play)
+			printf "* score: %f\n" score
 			return play
 
 data SearchState s = SearchState {
