@@ -139,7 +139,7 @@ movingPlays !side board@(FastBoard pieces _) = concatMap generatePlaysFor friend
 			where
 				playsAt !posTo
 					|isPiecePromotable && isPositionPromotable posFrom posTo =
-						[Move posFrom posTo pieceType, Move posFrom posTo promotedType]
+						[Move posFrom posTo promotedType, Move posFrom posTo pieceType]
 					|otherwise = [Move posFrom posTo pieceType]
 				isPiecePromotable = isPromotable pieceType
 				promotedType = promote pieceType

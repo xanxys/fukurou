@@ -94,9 +94,9 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 		_ -> do
 			let ((score, play), (number', cacheSize')) = runST $ do
 				number <- newSTRef 0
-				cache <- Data.HashTable.ST.Basic.new -- newSTRef M.empty
+				cache <- Data.HashTable.ST.Basic.newSized (1000 * 1000)
 				let state = SearchState {numberOfBoards = number, scoreCache = cache}
-				result <- searchBestPlay state weight (-10000) 10000 maxDepth side $ compressBoard $ latestBoard game
+				result <- searchBestPlay state weight (-100000) 100000 maxDepth side $ compressBoard $ latestBoard game
 				number' <- readSTRef number
 				cacheSize' <- liftM length (H.toList cache)
 				return (result, (number', cacheSize'))
@@ -132,9 +132,7 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 	|depth == 0 = do
 		score <- evaluateBoard state weight side board
 		return $! score `seq` (score, error "Terminal Node")
-	|null plays = do
-		score <- evaluateBoard state weight side board
-		return $! score `seq` (score, Resign)
+	|null plays = return (-10000, Resign)
 	|otherwise = do
 		maybeEntry <- H.lookup (scoreCache state) (side, board)
 		case maybeEntry of

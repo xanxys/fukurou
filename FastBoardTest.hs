@@ -2,6 +2,7 @@
 -- | Check if FastBoard's behavior is equivalent to Base implementation.
 import Control.Applicative
 import Control.Monad
+import Data.List
 import qualified Data.Map as M
 import Test.QuickCheck
 import Test.QuickCheck.All
@@ -56,12 +57,12 @@ prop_losslessBoardCompression board = (compressBoard . decompressBoard) board' =
 -- TODO: board is too narrow
 prop_movingPlaysEquivalence side =
 	forAll boardWithKings $ \board ->
-		FastBoard.movingPlays side (compressBoard board) == Base.movingPlays side board
+		sort (FastBoard.movingPlays side (compressBoard board)) == sort (Base.movingPlays side board)
 
 prop_isCheckEquivalence side =
 	forAll boardWithKings $ \board ->
 		FastBoard.isCheck side (compressBoard board) == Base.isCheck side board
- 
+
 
 main = do
 --	$verboseCheckAll
