@@ -137,20 +137,20 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 		maybeEntry <- H.lookup (scoreCache state) (side, board)
 		case maybeEntry of
 			Nothing -> do
-				entry <- findBestPlay alpha (head plays) (tail plays)
+				entry <- findBestPlay alpha (error "Dummy Play") plays
 				H.insert (scoreCache state) (side, board) entry
 				return entry
 			Just entry -> do
 				return entry
 	where
-		findBestPlay !currentBestScore !currentBestPlay [] = return (currentBestScore, currentBestPlay)
-		findBestPlay !currentBestScore !currentBestPlay (play:plays)
-			|currentBestScore >= beta = return (currentBestScore, currentBestPlay)
+		findBestPlay !bestScore bestPlay [] = return (bestScore, bestPlay)
+		findBestPlay !bestScore bestPlay (play:plays)
+			|bestScore >= beta = return (bestScore, bestPlay)
 			|otherwise = do
-				(scoreEnemy, _) <- searchBestPlay state weight (-beta) (-currentBestScore) (depth - 1) (flipSide side) (FastBoard.updateBoard play board)
+				(scoreEnemy, _) <- searchBestPlay state weight (-beta) (-bestScore) (depth - 1) (flipSide side) (FastBoard.updateBoard play board)
 				let score = (-scoreEnemy)
-				if score > currentBestScore
+				if score > bestScore
 					then findBestPlay score play plays
-					else findBestPlay currentBestScore currentBestPlay plays
+					else findBestPlay bestScore bestPlay plays
 
 		plays = FastBoard.legalMovesConsideringCheck side board
