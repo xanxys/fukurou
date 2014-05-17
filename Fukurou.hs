@@ -19,8 +19,10 @@ import Data.Maybe
 import Data.Ord
 import Data.STRef
 import qualified Data.Strict.Tuple as ST
+import Data.Time.Clock
 import Data.Word
 import System.Random
+import System.Timeout
 import Text.Printf
 
 import Base
@@ -92,20 +94,36 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 	case Base.legalMovesConsideringCheck side $ latestBoard game of
 		[] -> return Resign
 		_ -> do
+			deadline <- liftM (addUTCTime searchTimeout) getCurrentTime
+			iterativeDFS game deadline (error "Initial search too deep") initialDepth
+	where
+		searchTimeout = 10
+		initialDepth = 4
+
+		-- First iteration must finish in time.
+		iterativeDFS game deadline best depth = do
+			delta <- liftM (diffUTCTime deadline) getCurrentTime
+			let deltaMicrosec = floor $ realToFrac delta * 10^6
+			result <- timeout deltaMicrosec (searchWithMaxDepth game depth)
+			case result of
+				Nothing -> return best
+				Just best' -> iterativeDFS game deadline best' (depth + 1)
+
+		searchWithMaxDepth :: Game -> Int -> IO Play
+		searchWithMaxDepth !game !depth = do
+			printf "== Searching with depth=%d\n" depth
 			let ((score, play), (number', cacheSize')) = runST $ do
 				number <- newSTRef 0
 				cache <- Data.HashTable.ST.Basic.newSized (1000 * 1000)
 				let state = SearchState {numberOfBoards = number, scoreCache = cache}
-				result <- searchBestPlay state weight (-100000) 100000 maxDepth side $ compressBoard $ latestBoard game
+				result <- searchBestPlay state weight (-100000) 100000 depth side $ compressBoard $ latestBoard game
 				number' <- readSTRef number
 				cacheSize' <- liftM length (H.toList cache)
 				return (result, (number', cacheSize'))
-			printf "#eval: %d\n" number'
-			printf "#stored boards: %d\n" cacheSize'
-			putStrLn $ "Score: " ++ show score
+			printf "* #eval: %d\n" number'
+			printf "* #stored boards: %d\n" cacheSize'
+			printf "* best play: %s\n" (show play)
 			return play
-	where
-		maxDepth = 5
 
 data SearchState s = SearchState {
 		numberOfBoards :: STRef s Int,
