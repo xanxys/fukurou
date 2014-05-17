@@ -49,7 +49,7 @@ continueGame players game = do
 
 	putStr $ showBoard $ latestBoard game
 	play <- getPlayFromPlayer $ lookupPair players (getTurn game)
-	
+
 	case addPlay play game of
 		Nothing -> do
 			putStrLn "illegal move; try again"
@@ -76,7 +76,7 @@ getPlayFromPlayer (Human side) = CUI.askPlay side
 getPlayFromPlayer (AI fukurou) = Fukurou.askPlay fukurou
 
 
--- | Ask the player an (unconstrained) play. 
+-- | Ask the player an (unconstrained) play.
 askPlay :: PlayerSide -> IO Play
 askPlay side = do
 	putStrLn "Your play? (CSA-style, e.g. 0055KA=五５角打, 2829TO=二９歩成, resign)"

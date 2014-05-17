@@ -166,7 +166,7 @@ legalMoves side board = movingPlays side board ++ puttingMoves side board
 
 puttingMoves :: PlayerSide -> BoardState -> [Play]
 puttingMoves side (BoardState pieces captures) =
-	filter (not . doubleFu) $ 
+	filter (not . doubleFu) $
 		[Put side posTo pieceType | posTo <- S.toList puttablePositions, pieceType <- puttableTypes]
 	where
 		doubleFu (Put side (ValidPosition x y) FU) =
