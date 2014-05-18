@@ -10,9 +10,9 @@ import Control.Monad
 import Control.Monad.ST
 import Data.Array.Unboxed
 import Data.Bits
-import qualified Data.HashTable.Class as H
-import qualified Data.HashTable.ST.Basic
 import qualified Data.Hashable
+import qualified Data.HashTable.Class
+import qualified Data.HashTable.ST.Basic
 import Data.List
 import qualified Data.Map as M
 import Data.Maybe
@@ -95,36 +95,38 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 		[] -> return Resign
 		_ -> do
 			deadline <- liftM (addUTCTime searchTimeout) getCurrentTime
-			iterativeDFS game deadline (error "Initial search too deep") initialDepth
+			iterativeDFS [] game deadline (error "Initial search too deep") initialDepth
 	where
 		searchTimeout = 10
 		initialDepth = 4
 
 		-- First iteration must finish in time.
-		iterativeDFS game deadline best depth = do
+		iterativeDFS cache game deadline best depth = do
 			delta <- liftM (diffUTCTime deadline) getCurrentTime
 			let deltaMicrosec = floor $ realToFrac delta * 10^6
-			result <- timeout deltaMicrosec (searchWithMaxDepth game depth)
+			result <- timeout deltaMicrosec (searchWithMaxDepth cache game depth)
 			case result of
 				Nothing -> return best
-				Just best' -> iterativeDFS game deadline best' (depth + 1)
+				Just (best', cache') -> iterativeDFS cache' game deadline best' (depth + 1)
 
-		searchWithMaxDepth :: Game -> Int -> IO Play
-		searchWithMaxDepth !game !depth = do
+		searchWithMaxDepth :: PureCache -> Game -> Int -> IO (Play, PureCache)
+		searchWithMaxDepth !cache0 !game !depth = do
 			printf "== Searching with depth=%d\n" depth
-			let ((score, play), (number', cacheSize')) = runST $ do
+			let ((score, play), (number', cache')) = runST $ do
 				number <- newSTRef 0
-				cache <- Data.HashTable.ST.Basic.newSized (1000 * 1000)
+				cache <- Data.HashTable.Class.fromList cache0
 				let state = SearchState {numberOfBoards = number, scoreCache = cache}
 				result <- searchBestPlay state weight (-100000) 100000 depth side $ compressBoard $ latestBoard game
 				number' <- readSTRef number
-				cacheSize' <- liftM length (H.toList cache)
-				return (result, (number', cacheSize'))
+				cache' <- Data.HashTable.Class.toList cache
+				return (result, (number', cache'))
 			printf "* #eval: %d\n" number'
-			printf "* #stored boards: %d\n" cacheSize'
+			printf "* #stored boards: %d\n" $ length cache'
 			printf "* best play: %s\n" (show play)
 			printf "* score: %f\n" score
-			return play
+			return (play, cache')
+
+type PureCache = [((PlayerSide, FastBoard), (Int, (Float, Play)))]
 
 data SearchState s = SearchState {
 		numberOfBoards :: STRef s Int,
@@ -157,12 +159,12 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 		case maybeEntry of
 			Nothing -> do
 				entry <- findBestPlay alpha (error "Dummy Play") plays
-				H.insert (scoreCache state) (side, board) (depth, entry)
+				Data.HashTable.Class.insert (scoreCache state) (side, board) (depth, entry)
 				return entry
 			Just entry -> return entry
 	where
 		lookupCache = do
-			maybeEntry <- H.lookup (scoreCache state) (side, board)
+			maybeEntry <- Data.HashTable.Class.lookup (scoreCache state) (side, board)
 			case maybeEntry of
 				Nothing -> return Nothing
 				Just (cachedDepth, entry) -> do
