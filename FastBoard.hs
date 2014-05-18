@@ -118,9 +118,18 @@ legalMovesConsideringCheck !side !board
 
 puttingMoves :: PlayerSide -> FastBoard -> [Play]
 puttingMoves !side (FastBoard pieces captures) =
+	filter (not . stuck) $
 	filter (not . doubleFu) $
 		[Put side posTo pieceType | posTo <- S.toList puttablePositions, pieceType <- puttableTypes]
 	where
+		stuck (Put Sente (ValidPosition x y) FU) = y == 1
+		stuck (Put Gote (ValidPosition x y) FU) = y == 9
+		stuck (Put Sente (ValidPosition x y) KY) = y == 1
+		stuck (Put Gote (ValidPosition x y) KY) = y == 9
+		stuck (Put Sente (ValidPosition x y) KE) = y <= 2
+		stuck (Put Gote (ValidPosition x y) KE) = y >= 8
+		stuck _ = False
+
 		doubleFu (Put side (ValidPosition x y) FU) =
 			any (\posSearch -> maybe False (== (side ST.:!: FU)) $ M.lookup posSearch pieces)
 			[ValidPosition x ySearch | ySearch <- [1..9]]
