@@ -128,7 +128,7 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 
 data SearchState s = SearchState {
 		numberOfBoards :: STRef s Int,
-		scoreCache :: Data.HashTable.ST.Basic.HashTable s (PlayerSide, FastBoard) (Float, Play)
+		scoreCache :: Data.HashTable.ST.Basic.HashTable s (PlayerSide, FastBoard) (Int, (Float, Play))
 	}
 
 instance Data.Hashable.Hashable PlayerSide where
@@ -153,15 +153,22 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 		return $! score `seq` (score, error "Terminal Node")
 	|null plays = return (-10000, Resign)
 	|otherwise = do
-		maybeEntry <- H.lookup (scoreCache state) (side, board)
+		maybeEntry <- lookupCache
 		case maybeEntry of
 			Nothing -> do
 				entry <- findBestPlay alpha (error "Dummy Play") plays
-				H.insert (scoreCache state) (side, board) entry
+				H.insert (scoreCache state) (side, board) (depth, entry)
 				return entry
-			Just entry -> do
-				return entry
+			Just entry -> return entry
 	where
+		lookupCache = do
+			maybeEntry <- H.lookup (scoreCache state) (side, board)
+			case maybeEntry of
+				Nothing -> return Nothing
+				Just (cachedDepth, entry) -> do
+					if cachedDepth < depth
+						then return Nothing
+						else return $ Just entry
 		findBestPlay !bestScore bestPlay [] = return (bestScore, bestPlay)
 		findBestPlay !bestScore bestPlay (play:plays)
 			|bestScore >= beta = return (bestScore, bestPlay)
