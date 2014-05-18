@@ -114,6 +114,7 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 		searchWithMaxDepth !cache0 !game !depth = do
 			gen <- takeMVar mRandomGen
 			printf "== Searching with depth=%d\n" depth
+			t0 <- getCurrentTime
 			let ((score, play), (number', cache'), gen') = runST $ do
 				number <- newSTRef 0
 				cache <- Data.HashTable.Class.fromList cache0
@@ -132,6 +133,8 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 			printf "* #stored boards: %d\n" $ length cache'
 			printf "* best play: %s\n" (show play)
 			printf "* score: %f\n" score
+			t1 <- getCurrentTime
+			printf "* time: %fs\n" (realToFrac $ t1 `diffUTCTime` t0 :: Float)
 			return (play, cache')
 
 type PureCache = [((PlayerSide, FastBoard), (Int, (Float, Play)))]
