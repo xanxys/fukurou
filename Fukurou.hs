@@ -9,6 +9,7 @@ import Control.Concurrent.MVar
 import Control.Monad
 import Control.Monad.ST
 import Data.Array.Unboxed
+import Data.Array.ST
 import Data.Bits
 import qualified Data.Hashable
 import qualified Data.HashTable.Class
@@ -111,15 +112,22 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 
 		searchWithMaxDepth :: PureCache -> Game -> Int -> IO (Play, PureCache)
 		searchWithMaxDepth !cache0 !game !depth = do
+			gen <- takeMVar mRandomGen
 			printf "== Searching with depth=%d\n" depth
-			let ((score, play), (number', cache')) = runST $ do
+			let ((score, play), (number', cache'), gen') = runST $ do
 				number <- newSTRef 0
 				cache <- Data.HashTable.Class.fromList cache0
-				let state = SearchState {numberOfBoards = number, scoreCache = cache}
+				sRandGen <- newSTRef gen
+				let state = SearchState {
+					numberOfBoards = number,
+					randGen = sRandGen,
+					scoreCache = cache}
 				result <- searchBestPlay state weight (-100000) 100000 depth side $ compressBoard $ latestBoard game
 				number' <- readSTRef number
 				cache' <- Data.HashTable.Class.toList cache
-				return (result, (number', cache'))
+				gen' <- readSTRef sRandGen
+				return (result, (number', cache'), gen')
+			putMVar mRandomGen gen'
 			printf "* #eval: %d\n" number'
 			printf "* #stored boards: %d\n" $ length cache'
 			printf "* best play: %s\n" (show play)
@@ -130,6 +138,7 @@ type PureCache = [((PlayerSide, FastBoard), (Int, (Float, Play)))]
 
 data SearchState s = SearchState {
 		numberOfBoards :: STRef s Int,
+		randGen :: STRef s StdGen,
 		scoreCache :: Data.HashTable.ST.Basic.HashTable s (PlayerSide, FastBoard) (Int, (Float, Play))
 	}
 
@@ -141,6 +150,13 @@ modifySTRef' ref f= do
 	x <- readSTRef ref
 	let x' = f x
 	x' `seq` writeSTRef ref x'
+
+shuffleWith :: SearchState s -> [a] -> ST s [a]
+shuffleWith !state !xs = do
+	gen <- readSTRef $ randGen state
+	let (xs', gen') = shuffle xs gen
+	gen' `seq` writeSTRef (randGen state) gen'
+	return xs'
 
 evaluateBoard :: SearchState s -> Weight -> PlayerSide -> FastBoard -> ST s Float
 evaluateBoard !state !weight !side !board = do
@@ -158,6 +174,7 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 		maybeEntry <- lookupCache
 		case maybeEntry of
 			Nothing -> do
+				-- playsRandom <- shuffleWith state plays
 				entry <- findBestPlay alpha (error "Dummy Play") plays
 				Data.HashTable.Class.insert (scoreCache state) (side, board) (depth, entry)
 				return entry
@@ -182,3 +199,26 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 					else findBestPlay bestScore bestPlay plays
 
 		plays = FastBoard.legalMovesConsideringCheck side board
+
+-- | Randomly shuffle a list without the IO Monad
+--   /O(N)/
+shuffle :: [a] -> StdGen -> ([a], StdGen)
+shuffle xs gen = runST (do
+        g <- newSTRef gen
+        let randomRST lohi = do
+              (a,s') <- liftM (randomR lohi) (readSTRef g)
+              writeSTRef g s'
+              return a
+        ar <- newArray n xs
+        xs' <- forM [1..n] $ \i -> do
+                j <- randomRST (i,n)
+                vi <- readArray ar i
+                vj <- readArray ar j
+                writeArray ar j vi
+                return vj
+        gen' <- readSTRef g
+        return (xs',gen'))
+  where
+    n = length xs
+    newArray :: Int -> [a] -> ST s (STArray s Int a)
+    newArray n xs =  newListArray (1,n) xs
