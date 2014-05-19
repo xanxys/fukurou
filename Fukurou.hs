@@ -39,20 +39,20 @@ defaultWeight :: Weight
 defaultWeight = Weight pieceWeight
 	where
 		pieceWeight = array (FU, OU) [
-			(FU, 1),
-			(KY, 3),
-			(KE, 4),
-			(GI, 5),
-			(KI, 6),
-			(KA, 8),
-			(HI, 10),
-			(TO, 7),
-			(NY, 6),
-			(NK, 6),
-			(NG, 6),
-			(UM, 10),
-			(RY, 12),
-			(OU, 1000)]
+			(FU, 100),
+			(KY, 300),
+			(KE, 400),
+			(GI, 500),
+			(KI, 600),
+			(KA, 800),
+			(HI, 1000),
+			(TO, 700),
+			(NY, 680),
+			(NK, 660),
+			(NG, 640),
+			(UM, 1100),
+			(RY, 1200),
+			(OU, 5000)]
 
 -- | Strict sum.
 sum' :: Num a => [a] -> a
@@ -100,7 +100,7 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 			deadline <- liftM (addUTCTime searchTimeout) getCurrentTime
 			iterativeDFS [] game deadline (error "Initial search too deep") initialDepth
 	where
-		searchTimeout = 10
+		searchTimeout = 15
 		initialDepth = 4
 
 		-- First iteration must finish in time.
@@ -180,8 +180,8 @@ searchBestPlay !state !weight !alpha !beta !shufflePlays !depth !side !board
 		maybeEntry <- lookupCache
 		case maybeEntry of
 			Nothing -> do
-				plays' <- if shufflePlays then shuffleWith state plays else return plays
-				entry <- findBestPlay alpha (error "Dummy Play") plays'
+				--plays' <- if shufflePlays then shuffleWith state plays else return plays
+				entry <- findBestPlay alpha (error "Dummy Play") plays
 				Data.HashTable.Class.insert (scoreCache state) (side, board) (depth, entry)
 				return entry
 			Just entry -> return entry
@@ -193,7 +193,7 @@ searchBestPlay !state !weight !alpha !beta !shufflePlays !depth !side !board
 				Just (cachedDepth, entry) -> do
 					if cachedDepth < depth
 						then return Nothing
-						else return $ Just entry
+						else return $! Just entry
 		findBestPlay !bestScore bestPlay [] = return (bestScore, bestPlay)
 		findBestPlay !bestScore bestPlay (play:plays)
 			|bestScore >= beta = return (bestScore, bestPlay)
