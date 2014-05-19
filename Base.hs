@@ -156,9 +156,19 @@ isCheck side state@(BoardState pieces _) = any takesKing $ enemyMoves
 		[(kingPos, _)] = filter ((== (side, OU)) . snd) $ M.assocs pieces
 
 legalMovesConsideringCheck :: PlayerSide -> BoardState -> [Play]
-legalMovesConsideringCheck side board = filter (not . leadsToCheck) $ legalMoves side board
+legalMovesConsideringCheck side board =
+	filter (not . leadsToCheck) $ legalMoves side board
 	where
 		leadsToCheck play = isCheck side (updateBoard play board)
+
+playLeadsToStuck :: PlayerSide -> Play -> Bool
+playLeadsToStuck side play = isStuck $ generates play
+	where
+		generates (Move _ posTo piece) = (posTo, piece)
+		generates (Put _ posTo piece) = (posTo, piece)
+		isStuck (pos, piece) = null $
+			destinations boardWithSinglePiece side pos
+			where boardWithSinglePiece = BoardState (M.singleton pos (side, piece)) (SengoPair [] [])
 
 -- | Legal moves: movings or puttings of pieces, excluding Resign.
 legalMoves :: PlayerSide -> BoardState -> [Play]
@@ -167,6 +177,7 @@ legalMoves side board = movingPlays side board ++ puttingMoves side board
 puttingMoves :: PlayerSide -> BoardState -> [Play]
 puttingMoves side (BoardState pieces captures) =
 	filter (not . doubleFu) $
+	filter (not . playLeadsToStuck side) $
 		[Put side posTo pieceType | posTo <- S.toList puttablePositions, pieceType <- puttableTypes]
 	where
 		doubleFu (Put side (ValidPosition x y) FU) =
@@ -180,7 +191,9 @@ puttingMoves side (BoardState pieces captures) =
 		puttableTypes = map head $ group $ sort $ lookupPair captures side
 
 movingPlays :: PlayerSide -> BoardState -> [Play]
-movingPlays side board@(BoardState pieces _) = concatMap generatePlaysFor friendPieces
+movingPlays side board@(BoardState pieces _) =
+	filter (not . playLeadsToStuck side) $
+		concatMap generatePlaysFor friendPieces
 	where
 		generatePlaysFor (posFrom, (_, pieceType)) =
 			concatMap playsAt $ destinations board side posFrom
@@ -225,10 +238,12 @@ destinations (BoardState pieces _) side posFrom = concatMap filterRun runs
 potentialDestinationsInfinite :: PlayerSide -> ValidPosition -> Piece -> [[(Int, Int)]]
 potentialDestinationsInfinite side pos piece
 	|side == Sente = potentialSenteDestinationsInfinite pos piece
-	|side == Gote = map (map flipYRaw) $ potentialSenteDestinationsInfinite (flipY pos) piece
+	|side == Gote = map (map flipYRaw) $ potentialSenteDestinationsInfinite (flipPositionY pos) piece
 	where
 		flipYRaw (x, y) = (x, 10 - y)
-		flipY (ValidPosition x y) = ValidPosition x (10 - y)
+
+flipPositionY :: ValidPosition -> ValidPosition
+flipPositionY (ValidPosition x y) = ValidPosition x (10 - y)
 
 -- | Movable positions without considering any other pieces nor board boundary.
 -- Returns "runs", each of which is blocked by a piece.

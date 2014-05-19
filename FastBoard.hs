@@ -145,12 +145,15 @@ movingPlays !side board@(FastBoard pieces _) = concatMap generatePlaysFor friend
 	where
 		generatePlaysFor (posFrom, (_ ST.:!: pieceType))
 			|isPromotable pieceType && inEnemyTerritory side posFrom =
-				map promotingPlayAt dests ++ map nonPromotingPlayAt dests
+				map promotingPlayAt dests ++ nonPromotingNonStuckPlays
 			|isPromotable pieceType =
-				mapMaybe maybePromotingPlayAt dests ++ map nonPromotingPlayAt dests
-			|otherwise = map nonPromotingPlayAt dests
+				mapMaybe maybePromotingPlayAt dests ++ nonPromotingNonStuckPlays
+			|otherwise = nonPromotingNonStuckPlays
 			where
 				dests = FastBoard.destinations board side posFrom
+
+				-- cf. promoting plays are guranteed to be non-stuck
+				nonPromotingNonStuckPlays = filter (not . stuck side) $! map nonPromotingPlayAt dests
 
 				nonPromotingPlayAt !posTo = Move posFrom posTo pieceType
 				promotingPlayAt !posTo = Move posFrom posTo promotedType
@@ -159,8 +162,13 @@ movingPlays !side board@(FastBoard pieces _) = concatMap generatePlaysFor friend
 					|otherwise = Nothing
 				promotedType = promote pieceType
 
-		isPositionPromotable posFrom posTo =
-			(inEnemyTerritory side posFrom || inEnemyTerritory side posTo)
+		stuck Sente (Move _ (ValidPosition x y) FU) = y == 1
+		stuck Gote (Move _ (ValidPosition x y) FU) = y == 9
+		stuck Sente (Move _ (ValidPosition x y) KY) = y == 1
+		stuck Gote (Move _ (ValidPosition x y) KY) = y == 9
+		stuck Sente (Move _ (ValidPosition x y) KE) = y <= 2
+		stuck Gote (Move _ (ValidPosition x y) KE) = y >= 8
+		stuck _ _ = False
 
 		friendPieces = filter ((==side) . ST.fst . snd) $ M.assocs pieces
 
