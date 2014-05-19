@@ -100,8 +100,8 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 			deadline <- liftM (addUTCTime searchTimeout) getCurrentTime
 			iterativeDFS [] game deadline (error "Initial search too deep") initialDepth
 	where
-		searchTimeout = 15
-		initialDepth = 4
+		searchTimeout = 60
+		initialDepth = 3
 
 		-- First iteration must finish in time.
 		iterativeDFS cache game deadline best depth = do
