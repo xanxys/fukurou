@@ -205,7 +205,17 @@ searchBestPlay !state !weight !alpha !beta !shufflePlays !depth !side !board
 					then findBestPlay score play plays
 					else findBestPlay bestScore bestPlay plays
 
-		plays = FastBoard.legalMovesConsideringCheck side board
+		plays = filter (not . isGenerallyUselessPlay side) $! FastBoard.legalMovesConsideringCheck side board
+
+-- | Check if any move exists that's always better than the given move.
+-- (there's none if you consider 打ち歩詰め #1, but we ignore it)
+isGenerallyUselessPlay :: PlayerSide -> Play -> Bool
+isGenerallyUselessPlay _ (Put _ _ _) = False
+isGenerallyUselessPlay !side (Move posFrom posTo pieceType)
+	|promotable = elem pieceType [FU, KA, HI]
+	|otherwise = False
+	where
+		promotable = inEnemyTerritory side posFrom || inEnemyTerritory side posTo
 
 -- | Randomly shuffle a list without the IO Monad
 --   /O(N)/
