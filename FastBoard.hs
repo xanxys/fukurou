@@ -143,14 +143,20 @@ puttingMoves !side (FastBoard pieces captures) =
 movingPlays :: PlayerSide -> FastBoard -> [Play]
 movingPlays !side board@(FastBoard pieces _) = concatMap generatePlaysFor friendPieces
 	where
-		generatePlaysFor (posFrom, (_ ST.:!: pieceType)) =
-			concatMap playsAt $ FastBoard.destinations board side posFrom
+		generatePlaysFor (posFrom, (_ ST.:!: pieceType))
+			|isPromotable pieceType && inEnemyTerritory side posFrom =
+				map promotingPlayAt dests ++ map nonPromotingPlayAt dests
+			|isPromotable pieceType =
+				mapMaybe maybePromotingPlayAt dests ++ map nonPromotingPlayAt dests
+			|otherwise = map nonPromotingPlayAt dests
 			where
-				playsAt !posTo
-					|isPiecePromotable && isPositionPromotable posFrom posTo =
-						[Move posFrom posTo promotedType, Move posFrom posTo pieceType]
-					|otherwise = [Move posFrom posTo pieceType]
-				isPiecePromotable = isPromotable pieceType
+				dests = FastBoard.destinations board side posFrom
+
+				nonPromotingPlayAt !posTo = Move posFrom posTo pieceType
+				promotingPlayAt !posTo = Move posFrom posTo promotedType
+				maybePromotingPlayAt !posTo
+					|inEnemyTerritory side posTo = Just $! Move posFrom posTo promotedType
+					|otherwise = Nothing
 				promotedType = promote pieceType
 
 		isPositionPromotable posFrom posTo =
