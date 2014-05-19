@@ -191,7 +191,7 @@ destinations (FastBoard pieces _) !side !posFrom = concatMap filterRun runs
 	where
 		runs = potentialDestionationsInfiniteTable ! (side, piece, posFrom)
 
-		filterRun (p:ps) = case M.lookup p pieces of
+		filterRun (!p : ps) = case M.lookup p pieces of
 				Nothing -> p : filterRun ps
 				Just (blockerSide ST.:!: blockerPos) ->
 					if blockerSide == side

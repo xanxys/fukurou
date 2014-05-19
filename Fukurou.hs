@@ -33,6 +33,8 @@ data Fukurou = Fukurou Weight (MVar StdGen) PlayerSide (MVar Game)
 
 data Weight = Weight (Array Piece Int)
 
+type Score = Int
+
 defaultWeight :: Weight
 defaultWeight = Weight pieceWeight
 	where
@@ -56,7 +58,7 @@ defaultWeight = Weight pieceWeight
 sum' :: Num a => [a] -> a
 sum' = foldl' (+) 0
 
-evaluateForSente :: Weight -> FastBoard -> Int
+evaluateForSente :: Weight -> FastBoard -> Score
 evaluateForSente (Weight pieceWeight) state@(FastBoard pieces (SengoPair cpSente cpGote)) =
 	(sum' $ map valueOfSidedPiece $ M.elems pieces) +
 	(evaluateCaptures cpSente - evaluateCaptures cpGote)
@@ -67,7 +69,7 @@ evaluateForSente (Weight pieceWeight) state@(FastBoard pieces (SengoPair cpSente
 		valueOfPiece !p = pieceWeight ! p
 		evaluateCaptures !caps = sum' $ map (\(t, n) -> n * valueOfPiece t) $ M.assocs caps
 
-evaluateFor :: Weight -> PlayerSide -> FastBoard -> Int
+evaluateFor :: Weight -> PlayerSide -> FastBoard -> Score
 evaluateFor w Sente state = evaluateForSente w state
 evaluateFor w Gote state = negate $ evaluateForSente w state
 
@@ -123,7 +125,7 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 					numberOfBoards = number,
 					randGen = sRandGen,
 					scoreCache = cache}
-				result <- searchBestPlay state weight (-100000) 100000 depth side $ compressBoard $ latestBoard game
+				result <- searchBestPlay state weight (-100000) 100000 True depth side $ compressBoard $ latestBoard game
 				number' <- readSTRef number
 				cache' <- Data.HashTable.Class.toList cache
 				gen' <- readSTRef sRandGen
@@ -137,12 +139,12 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 			printf "* time: %fs\n" (realToFrac $ t1 `diffUTCTime` t0 :: Float)
 			return (play, cache')
 
-type PureCache = [((PlayerSide, FastBoard), (Int, (Int, Play)))]
+type PureCache = [((PlayerSide, FastBoard), (Int, (Score, Play)))]
 
 data SearchState s = SearchState {
 		numberOfBoards :: STRef s Int,
 		randGen :: STRef s StdGen,
-		scoreCache :: Data.HashTable.ST.Basic.HashTable s (PlayerSide, FastBoard) (Int, (Int, Play))
+		scoreCache :: Data.HashTable.ST.Basic.HashTable s (PlayerSide, FastBoard) (Int, (Score, Play))
 	}
 
 instance Data.Hashable.Hashable PlayerSide where
@@ -161,14 +163,15 @@ shuffleWith !state !xs = do
 	gen' `seq` writeSTRef (randGen state) gen'
 	return xs'
 
-evaluateBoard :: SearchState s -> Weight -> PlayerSide -> FastBoard -> ST s Int
+evaluateBoard :: SearchState s -> Weight -> PlayerSide -> FastBoard -> ST s Score
 evaluateBoard !state !weight !side !board = do
 	modifySTRef' (numberOfBoards state) (+1)
 	return $! evaluateFor weight side board
 
 -- | Select optimal play for current side. Returns the play and score.
-searchBestPlay :: SearchState s -> Weight -> Int -> Int -> Int -> PlayerSide -> FastBoard -> ST s (Int, Play)
-searchBestPlay !state !weight !alpha !beta !depth !side !board
+searchBestPlay :: SearchState s -> Weight -> Score -> Score ->
+	Bool -> Int -> PlayerSide -> FastBoard -> ST s (Score, Play)
+searchBestPlay !state !weight !alpha !beta !shufflePlays !depth !side !board
 	|depth == 0 = do
 		score <- evaluateBoard state weight side board
 		return $! score `seq` (score, error "Terminal Node")
@@ -177,8 +180,8 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 		maybeEntry <- lookupCache
 		case maybeEntry of
 			Nothing -> do
-				-- playsRandom <- shuffleWith state plays
-				entry <- findBestPlay alpha (error "Dummy Play") plays
+				plays' <- if shufflePlays then shuffleWith state plays else return plays
+				entry <- findBestPlay alpha (error "Dummy Play") plays'
 				Data.HashTable.Class.insert (scoreCache state) (side, board) (depth, entry)
 				return entry
 			Just entry -> return entry
@@ -195,7 +198,8 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 		findBestPlay !bestScore bestPlay (play:plays)
 			|bestScore >= beta = return (bestScore, bestPlay)
 			|otherwise = do
-				(scoreEnemy, _) <- searchBestPlay state weight (-beta) (-bestScore) (depth - 1) (flipSide side) (FastBoard.updateBoard play board)
+				(scoreEnemy, _) <- searchBestPlay state weight
+					(-beta) (-bestScore) False (depth - 1) (flipSide side) (FastBoard.updateBoard play board)
 				let score = (-scoreEnemy)
 				if score > bestScore
 					then findBestPlay score play plays
@@ -206,22 +210,22 @@ searchBestPlay !state !weight !alpha !beta !depth !side !board
 -- | Randomly shuffle a list without the IO Monad
 --   /O(N)/
 shuffle :: [a] -> StdGen -> ([a], StdGen)
-shuffle xs gen = runST (do
-        g <- newSTRef gen
-        let randomRST lohi = do
-              (a,s') <- liftM (randomR lohi) (readSTRef g)
-              writeSTRef g s'
-              return a
-        ar <- newArray n xs
-        xs' <- forM [1..n] $ \i -> do
-                j <- randomRST (i,n)
-                vi <- readArray ar i
-                vj <- readArray ar j
-                writeArray ar j vi
-                return vj
-        gen' <- readSTRef g
-        return (xs',gen'))
-  where
-    n = length xs
-    newArray :: Int -> [a] -> ST s (STArray s Int a)
-    newArray n xs =  newListArray (1,n) xs
+shuffle !xs !gen = runST $ do
+	g <- newSTRef gen
+	let randomRST lohi = do
+		(a,s') <- liftM (randomR lohi) (readSTRef g)
+		writeSTRef g s'
+		return a
+	ar <- newArray n xs
+	xs' <- forM [1..n] $ \i -> do
+		j <- randomRST (i,n)
+		vi <- readArray ar i
+		vj <- readArray ar j
+		writeArray ar j vi
+		return vj
+	gen' <- readSTRef g
+	return (xs',gen')
+	where
+		n = length xs
+		newArray :: Int -> [a] -> ST s (STArray s Int a)
+		newArray n xs =  newListArray (1,n) xs
