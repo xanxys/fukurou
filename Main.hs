@@ -1,3 +1,11 @@
-import CUI
+import System.Environment
+import Control.Monad
 
-main = doCUIGame
+import CUI
+import Learn
+
+main = do
+	args <- getArgs
+	case args of
+		["--learn"] -> doLearn
+		_ -> void $ doCUIGame

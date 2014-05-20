@@ -3,3 +3,5 @@
 *.prof
 Main
 dist/
+floodgate/
+*.log
