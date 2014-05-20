@@ -61,7 +61,8 @@ sum' = foldl' (+) 0
 evaluateForSente :: Weight -> FastBoard -> Score
 evaluateForSente (Weight pieceWeight) state@(FastBoard pieces (SengoPair cpSente cpGote)) =
 	(sum' $ map valueOfSidedPiece $ M.elems pieces) +
-	(evaluateCaptures cpSente - evaluateCaptures cpGote)
+	(evaluateCaptures cpSente - evaluateCaptures cpGote) +
+	(length (FastBoard.movingPlays Sente state) - length (FastBoard.movingPlays Gote state)) * 25
 	where
 		valueOfSidedPiece (Sente ST.:!: p) = valueOfPiece p
 		valueOfSidedPiece (Gote ST.:!: p) = - valueOfPiece p
@@ -100,7 +101,7 @@ askPlay (Fukurou weight mRandomGen side mGame) = do
 			deadline <- liftM (addUTCTime searchTimeout) getCurrentTime
 			iterativeDFS [] game deadline (error "Initial search too deep") initialDepth
 	where
-		searchTimeout = 60
+		searchTimeout = 15
 		initialDepth = 3
 
 		-- First iteration must finish in time.
