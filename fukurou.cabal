@@ -2,15 +2,13 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                fukurou
-version:             0.1.0
+version:             0.2.0
 synopsis:            A shogi AI to beat well-known (but weak) hamu-shogi
--- description:         
 homepage:            https://github.com/xanxys/fukurou
 license:             BSD3
 license-file:        LICENSE
 author:              xanxys
 maintainer:          xanxys@gmail.com
--- copyright:           
 category:            Game
 build-type:          Simple
 cabal-version:       >=1.8
@@ -18,4 +16,4 @@ cabal-version:       >=1.8
 executable fukurou
   main-is:             Main.hs
   ghc-options: -O2 -with-rtsopts=-K100M
-  build-depends:       base ==4.5.*, containers ==0.4.*, mtl ==2.1.*, random ==1.0.*, array ==0.4.0.0
+  build-depends:       base ==4.5.*, containers ==0.4.*, mtl ==2.1.*, random ==1.0.*, array ==0.4.*, strict>=0.3, hashable==1.1.*, hashtables==1.*, time==1.*
