@@ -84,7 +84,7 @@ data Play
 data Game = Game {
 	playerNames :: SengoPair String,
 	plays :: [Play],
-	latestBoard :: BoardState}
+	latestBoard :: BoardState} deriving(Show)
 
 getTurn :: Game -> PlayerSide
 getTurn game
@@ -123,6 +123,7 @@ updateBoard (Put side posTo pieceTypeTo) (BoardState pieces captures)
 	where
 		pieces' = M.insert posTo (side, pieceTypeTo) pieces
 		captures' = partiallyModifyPair side (subtractCapture pieceTypeTo) captures
+updateBoard Resign board = board
 
 -- TODO: consider draw case.
 -- TODO: implement check-mate
